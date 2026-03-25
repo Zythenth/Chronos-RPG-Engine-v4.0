@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "2.0",
-    "last_updated": "TURNO_3",
+    "last_updated": "TURNO_0",
     "pipeline": "Chronos RPG Engine v4.0",
     "instrucao": "Atualizado pelo System_Engine ao fim de todo turno. Lido pelo Passo 0 antes de qualquer ação. world_state: estado do mundo persistente — clima, ciclo dia/noite e armadilhas ativas."
   },
@@ -14,7 +14,7 @@
     "status": "EM_ANDAMENTO"
   },
   "contagem": {
-    "interacoes_no_capitulo": 3,
+    "interacoes_no_capitulo": 0,
     "minimo_para_encerrar": 15,
     "maximo_obrigatorio": 25,
     "alerta_final_ativado": false

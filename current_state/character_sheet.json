@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": "1.0",
-    "last_updated": "TURNO_4",
+    "last_updated": "TURNO_0",
     "pipeline": "Chronos RPG Engine v4.0"
   },
   "identity": {
@@ -22,7 +22,7 @@
       "unit": "%"
     },
     "energy_reserves": {
-      "current": 85,
+      "current": 100,
       "max": 100,
       "unit": "%"
     },
@@ -36,15 +36,15 @@
       "max": 10
     },
     "fome": {
-      "current": 91,
+      "current": 100,
       "max": 100
     },
     "sede": {
-      "current": 90,
+      "current": 100,
       "max": 100
     },
     "exaustao": {
-      "current": 96,
+      "current": 100,
       "max": 100
     }
   },
