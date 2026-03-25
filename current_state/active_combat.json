@@ -1,0 +1,59 @@
+{
+  "meta": {
+    "version": "4.0",
+    "last_updated": "TURNO_0",
+    "instrucao": "Criado pelo Architect quando combate inicia. Zerado quando inimigo morre ou combate termina. Lido pelo System_Engine e Game_Master em todo turno de combate."
+  },
+  "combate_ativo": false,
+  "turno_combate": 0,
+  "posicionamento": {
+    "estado_atual": "MELEE",
+    "_estados_validos": "MELEE | DISTANCIA | COBERTO | FLANQUEANDO"
+  },
+  "inimigo": {
+    "nome": null,
+    "classe": null,
+    "raca": null,
+    "hp_atual": null,
+    "hp_maximo": null,
+    "dc_defesa": null,
+    "dc_defesa_efetiva": null,
+    "dano_por_turno": null,
+    "damage_bonus_racial": null,
+    "tipo_dano": null,
+    "is_territorial": null,
+    "status_effects": [],
+    "ficha_racial": {
+      "descricao_curta": null,
+      "habitat": null,
+      "comportamento": null,
+      "fraqueza": null,
+      "imunidade": null,
+      "resistencia": null,
+      "acerto_critico_efeito": null,
+      "habilidade_especial": null,
+      "drop": null
+    }
+  },
+  "moral": {
+    "fugiu": false
+  },
+  "multi_inimigos": {
+    "ativo": false,
+    "lista": []
+  },
+  "boss_state": {
+    "e_boss": false,
+    "fase_atual": 1,
+    "fase_ativada": false,
+    "dano_bonus_fase2": 0,
+    "dc_bonus_fase2": 0,
+    "habilidade_fase2": null
+  },
+  "jogador": {
+    "arma_equipada": null,
+    "armadura_equipada": null,
+    "tem_armadura": false
+  },
+  "historico_dano": []
+}

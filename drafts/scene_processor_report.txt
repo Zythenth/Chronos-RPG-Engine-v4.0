@@ -1,0 +1,23 @@
+# SCENE PROCESSOR REPORT
+dry_run: False
+fonte: PARTE4_GM_PYTHON_PURO
+
+## JSON final
+{
+  "fome": 0,
+  "sede": 0,
+  "exaustao": 0,
+  "energia": -5,
+  "hp": 0,
+  "itens_adicionados": [],
+  "justificativa": "Falha na exploração resultou em consumo de energia do traje e queda em terreno desfavorável."
+}
+
+## Log
+[SP] Vitais: HP: 20/20  FOME: 91%  SEDE: 90%  EXAUSTAO: 96%  ENERGIA: 90%
+[SP] PARTE 4 detectada — fonte: GM. Sem chamada Gemini.
+[SP] Justificativa: Falha na exploração resultou em consumo de energia do traje e queda em terreno desfavorável.
+[SP] PARTE 4: nenhum item declarado
+[SP] Gemini: Falha na exploração resultou em consumo de energia do traje e queda em terreno desfavorável.
+[SP] energy_reserves: 90 -> 85 (-5)
+[SP] character_sheet.json salvo com sucesso.

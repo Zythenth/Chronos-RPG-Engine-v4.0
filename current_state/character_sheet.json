@@ -1,0 +1,151 @@
+{
+  "meta": {
+    "version": "1.0",
+    "last_updated": "TURNO_4",
+    "pipeline": "Chronos RPG Engine v4.0"
+  },
+  "identity": {
+    "name": "Ferro",
+    "role": "Sucateiro Independente",
+    "origem": "Setor 9, Nova Carthage",
+    "chip": "CHRONOS-7 ALPHA (integrado)",
+    "status": "STABLE"
+  },
+  "vitals": {
+    "hp": {
+      "current": 20,
+      "max": 20
+    },
+    "oxygen_level": {
+      "current": 100,
+      "max": 100,
+      "unit": "%"
+    },
+    "energy_reserves": {
+      "current": 85,
+      "max": 100,
+      "unit": "%"
+    },
+    "hull_integrity": {
+      "current": 100,
+      "max": 100,
+      "unit": "%"
+    },
+    "fuel_cells": {
+      "current": 0,
+      "max": 10
+    },
+    "fome": {
+      "current": 91,
+      "max": 100
+    },
+    "sede": {
+      "current": 90,
+      "max": 100
+    },
+    "exaustao": {
+      "current": 96,
+      "max": 100
+    }
+  },
+  "attributes": {
+    "forca": {
+      "abbr": "FOR",
+      "value": 10,
+      "description": "Força física, combate corpo a corpo, carregar peso."
+    },
+    "destreza": {
+      "abbr": "DES",
+      "value": 10,
+      "description": "Velocidade, precisão, evasão e furtividade."
+    },
+    "inteligencia": {
+      "abbr": "INT",
+      "value": 8,
+      "description": "Análise, hacking, engenharia e interface com o chip."
+    },
+    "sobrevivencia": {
+      "abbr": "SOB",
+      "value": 10,
+      "description": "Resistência a dano ambiental, fome, frio, veneno e radiação."
+    },
+    "percepcao": {
+      "abbr": "PER",
+      "value": 10,
+      "description": "Detectar ameaças, rastrear sinais, ler ambiente."
+    },
+    "carisma": {
+      "abbr": "CAR",
+      "value": 2,
+      "description": "Negociação, persuasão, leitura de NPCs."
+    }
+  },
+  "skills": {
+    "combat": {
+      "base_attribute": "DES",
+      "bonus": 0,
+      "description": "Ataque ranged e melee. Base: DES."
+    },
+    "engineering": {
+      "base_attribute": "INT",
+      "bonus": 0,
+      "description": "Reparo, crafting, improvisação de ferramentas. Base: INT."
+    },
+    "piloting": {
+      "base_attribute": "DES",
+      "bonus": 0,
+      "description": "Manobras de nave e EVA. Base: DES."
+    },
+    "survival": {
+      "base_attribute": "SOB",
+      "bonus": 0,
+      "description": "Caça, rastreamento, improvisação em ambientes hostis. Base: SOB."
+    },
+    "stealth": {
+      "base_attribute": "DES",
+      "bonus": 0,
+      "description": "Mover-se sem ser detectado. Base: DES."
+    },
+    "chip_interface": {
+      "base_attribute": "INT",
+      "bonus": 0,
+      "description": "Ativar funções avançadas do CHRONOS-7, hackear sistemas via toque. Base: INT."
+    }
+  },
+  "chip_status": {
+    "carga_atual": 100,
+    "carga_maxima": 100,
+    "funcoes_ativas": [
+      "Processamento tático",
+      "Tradução de línguas conhecidas",
+      "Interface eletrônica via toque"
+    ],
+    "funcoes_bloqueadas": [
+      "Salto temporal controlado",
+      "Desconhecidas"
+    ]
+  },
+  "active_status_effects": [],
+  "active_status_effects_schema": "{ id: str, stacks: int, turno_restante: int|null }",
+  "equipment": {
+    "armor": null,
+    "weapon_primary": null,
+    "weapon_secondary": null,
+    "suit_integrity": {
+      "current": 100,
+      "max": 100,
+      "unit": "%"
+    }
+  },
+  "progression": {
+    "level": 1,
+    "xp_current": 0,
+    "xp_to_next_level": 100,
+    "attribute_points_available": 0,
+    "total_attribute_points_spent": 0,
+    "skill_choice_pending": false,
+    "_skill_choice_instrucao": "true quando level up ocorreu e o jogador ainda não escolhou habilidade passiva. Pipeline bloqueado até escolha. Zerado pelo Architect após aplicar."
+  },
+  "passive_skills": [],
+  "_passive_skills_schema": "list[str] — ids de habilidades passivas adquiridas. Ver mechanics_engine.py Seção 34 e leveling_rules.md. Efeitos aplicados via apply_passive_skill_effects() em todo turno. Exemplos de ids: 'pele_grossa', 'olho_clinico', 'sombra'."
+}

@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "version": "2.0",
+    "last_updated": "TURNO_3",
+    "pipeline": "Chronos RPG Engine v4.0",
+    "instrucao": "Atualizado pelo System_Engine ao fim de todo turno. Lido pelo Passo 0 antes de qualquer ação. world_state: estado do mundo persistente — clima, ciclo dia/noite e armadilhas ativas."
+  },
+  "capitulo_atual": {
+    "numero": 1,
+    "titulo": "Salto no Tempo",
+    "arco": "ARC 1 — ORIGEM TERRESTRE",
+    "ambiente": "Selva primitiva",
+    "resumo": "O chip teleporta o sucateiro para uma selva de era pré-industrial.",
+    "status": "EM_ANDAMENTO"
+  },
+  "contagem": {
+    "interacoes_no_capitulo": 3,
+    "minimo_para_encerrar": 15,
+    "maximo_obrigatorio": 25,
+    "alerta_final_ativado": false
+  },
+  "historico_capitulos": [],
+  "regras": {
+    "incremento": "O System_Engine incrementa interacoes_no_capitulo em +1 ao fim de CADA turno processado.",
+    "alerta": "Quando interacoes_no_capitulo >= 15, definir alerta_final_ativado como true. O Game_Master deve sinalizar na narrativa que o arco está se aproximando do fim.",
+    "encerramento_forcado": "Quando interacoes_no_capitulo >= 25, o capitulo DEVE ser encerrado no turno atual, independente da ação do jogador. O Lore_Archivist escreve o fechamento e avança para o próximo capítulo.",
+    "avanco_manual": "O jogador pode encerrar um capítulo entre a interação 15 e 24 se sua ação naturalmente conclui o objetivo do capítulo. O Architect registra o encerramento antecipado.",
+    "proibido": "NUNCA encerrar um capítulo antes da interação 15, mesmo que a ação pareça concluir o arco."
+  },
+  "world_state": {
+    "_instrucao": "Estado do mundo persistente. Atualizado pelo System_Engine a cada turno. Clima: get_weather_modifiers() — Seção 31. Período: get_daynight_modifiers() / advance_daynight() — Seção 32. Armadilhas: lista de armadilhas ativas no ambiente atual — Seção 33.",
+    "clima": {
+      "estado_atual": "LIMPO",
+      "_estados_validos": "LIMPO | CHUVA | TEMPESTADE | NEBLINA | VENTO_FORTE | FRIO_EXTREMO | CHUVA_ACIDA",
+      "_instrucao": "Atualizado no início de cada turno. Mudança probabilística: role d20 interno; se ≤ 4, sortear novo estado de WEATHER_TRANSITIONS[estado_atual] — mechanics_engine Seção 31. Modificadores consultados via get_weather_modifiers()."
+    },
+    "periodo": {
+      "estado_atual": "DIA",
+      "turno_no_periodo": 0,
+      "_estados_validos": "AMANHECER | DIA | ENTARDECER | NOITE",
+      "_instrucao": "Avançado via advance_daynight() — Seção 32. Cada período dura 4 turnos na selva primitiva.",
+      "turnos_no_periodo": 4
+    },
+    "armadilhas": [],
+    "_armadilhas_schema": {
+      "id": "str — identificador único (ex: 'armadilha_01')",
+      "nome": "str — nome narrativo (ex: 'Laço de Fibra')",
+      "tipo": "str — fisica | explosiva | eletrica | quimica | alarme",
+      "posicao": "str — descrição narrativa da localização (ex: 'trilha norte, 10m do rio')",
+      "dc_deteccao": "int — DC para detectar antes de acionar",
+      "dc_desarme": "int — DC para desarmar sem acionar",
+      "status": "str — ATIVA | ACIONADA | DESARMADA",
+      "criada_por": "str — 'FERRO' | 'INIMIGO' | 'AMBIENTAL'",
+      "turno_criacao": "int"
+    },
+    "patrulhas": {
+      "ativas": true,
+      "nivel": "BAIXO",
+      "ultimo_avistamento": 0
+    }
+  }
+}

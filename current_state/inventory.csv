@@ -1,0 +1,7 @@
+id,name,type,rarity,quantity,weight_kg,effect,usable,durability,durability_max,passive_bonus,notes
+1,Ração de Emergência,Consumível,Incomum,1,0.3,+5 HP se usada como ação.,true,null,null,null,Último alimento que Ferro carregava antes do salto.
+2,Bateria de Íon Pequena,Consumível,Incomum,1,0.4,+10 Energy se usada como ação.,true,null,null,null,
+3,Injetor Médico,Consumível,Incomum,1,0.3,+10 HP se usado como ação. Remove 1 stack de Hemorragia.,true,null,null,null,Kit médico improvisado de sucateiro.
+4,Cabo de Cobre,Material,Comum,2,0.2,Componente genérico de crafting.,false,null,null,null,
+5,Parafusos de Titânio,Material,Comum,1,0.1,Componente estrutural.,false,null,null,null,
+6,Faca de Sucateiro,Arma,Comum,1,0.4,Arma improvisada. +1 dano em combate melee.,true,8,10,null,Ferrugenta mas funcional.

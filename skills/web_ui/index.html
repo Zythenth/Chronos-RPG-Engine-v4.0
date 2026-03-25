@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHRONOS-7 // COCKPIT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Inter:wght@300;400&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #02040a;
+            --holo: #00e5ff;
+            --holo2: #0099bb;
+            --amber: #ffaa00;
+            --red: #ff2244;
+            --green: #00ff88;
+            --purple: #8844ff;
+            --border: rgba(0, 229, 255, 0.18);
+            --border2: rgba(0, 229, 255, 0.08);
+            --text: #c8e8f8;
+            --text-dim: rgba(180, 220, 255, 0.35);
+            --text-mid: rgba(180, 220, 255, 0.6);
+            --glow-sm: 0 0 8px rgba(0, 229, 255, 0.5);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-weight: 300;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden
+        }
+
+        #particles-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: .5
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent 0px, transparent 3px, rgba(0, 0, 0, .08) 3px, rgba(0, 0, 0, .08) 4px);
+            pointer-events: none;
+            z-index: 9999
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 10, .75) 100%);
+            pointer-events: none;
+            z-index: 9998
+        }
+
+        /* HEADER */
+        #header {
+            position: relative;
+            z-index: 100;
+            background: linear-gradient(180deg, rgba(0, 20, 40, .98) 0%, rgba(2, 8, 20, .96) 100%);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, .6);
+            padding: 0 24px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-shrink: 0
+        }
+
+        #header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent 0%, var(--holo) 20%, var(--holo) 80%, transparent 100%);
+            box-shadow: 0 0 16px var(--holo)
+        }
+
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 6px;
+            color: var(--holo);
+            text-shadow: var(--glow-sm);
+            white-space: nowrap
+        }
+
+        .logo-sub {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            margin-top: -2px
+        }
+
+        .hdiv {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+            flex-shrink: 0
+        }
+
+        #status-pill {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(0, 229, 255, .06);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 12px
+        }
+
+        #status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: dot-idle 3s infinite
+        }
+
+        @keyframes dot-idle {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .4
+            }
+        }
+
+        #status-dot.busy {
+            background: var(--holo);
+            box-shadow: 0 0 10px var(--holo);
+            animation: dot-busy .5s infinite
+        }
+
+        @keyframes dot-busy {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .1
+            }
+        }
+
+        #status-dot.error {
+            background: var(--red);
+            box-shadow: 0 0 10px var(--red);
+            animation: none
+        }
+
+        #status-text {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--text-mid)
+        }
+
+        #cap-bar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px
+        }
+
+        .cap-item {
+            text-align: center
+        }
+
+        .cap-item .label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: var(--text-dim)
+        }
+
+        .cap-item .value {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--holo);
+            text-shadow: var(--glow-sm)
+        }
+
+        .inter-ring {
+            width: 32px;
+            height: 32px;
+            position: relative
+        }
+
+        .inter-ring svg {
+            transform: rotate(-90deg)
+        }
+
+        .inter-ring circle {
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round
+        }
+
+        .ir-track {
+            stroke: var(--border)
+        }
+
+        .ir-fill {
+            stroke: var(--holo);
+            filter: drop-shadow(0 0 3px var(--holo));
+            transition: stroke-dashoffset .8s ease
+        }
+
+        /* MAIN */
+        #main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: 0;
+            position: relative;
+            z-index: 10
+        }
+
+        /* HUD */
+        #hud {
+            background: linear-gradient(180deg, rgba(3, 10, 25, .97) 0%, rgba(2, 6, 18, .97) 100%);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 16px 0;
+            display: flex;
+            flex-direction: column;
+            position: relative
+        }
+
+        #hud::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -1px;
+            width: 1px;
+            height: 100%;
+            background: linear-gradient(180deg, transparent 0%, var(--holo) 30%, var(--holo) 70%, transparent 100%);
+            opacity: .4
+        }
+
+        #hud::-webkit-scrollbar {
+            width: 2px
+        }
+
+        #hud::-webkit-scrollbar-thumb {
+            background: var(--border)
+        }
+
+        .hud-s {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border2)
+        }
+
+        .hud-t {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 4px;
+            color: var(--holo);
+            opacity: .5;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px
+        }
+
+        .hud-t::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border) 0%, transparent 100%)
+        }
+
+        /* Vitals */
+        .vrow {
+            display: grid;
+            grid-template-columns: 62px 1fr 48px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 9px
+        }
+
+        .vlabel {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0px;
+            color: #cccccc;
+            white-space: nowrap
+        }
+
+        .vtrack {
+            height: 3px;
+            background: rgba(255, 255, 255, .05);
+            border-radius: 2px;
+            overflow: visible;
+            position: relative
+        }
+
+        .vfill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width .7s cubic-bezier(.4, 0, .2, 1);
+            position: relative
+        }
+
+        .vfill::after {
+            content: '';
+            position: absolute;
+            right: -2px;
+            top: -3px;
+            width: 4px;
+            height: 9px;
+            border-radius: 2px;
+            background: inherit;
+            filter: blur(3px);
+            opacity: .8
+        }
+
+        .vf-hp {
+            background: var(--green);
+            box-shadow: 0 0 6px rgba(0, 255, 136, .6)
+        }
+
+        .vf-o2 {
+            background: var(--holo);
+            box-shadow: 0 0 6px rgba(0, 229, 255, .6)
+        }
+
+        .vf-en {
+            background: var(--purple);
+            box-shadow: 0 0 6px rgba(136, 68, 255, .6)
+        }
+
+        .vf-hull {
+            background: #5588ff;
+            box-shadow: 0 0 6px rgba(85, 136, 255, .6)
+        }
+
+        .vf-suit {
+            background: #88aaff;
+            box-shadow: 0 0 5px rgba(136, 170, 255, .5)
+        }
+
+        .vf-fome {
+            background: #ff8800;
+            box-shadow: 0 0 6px rgba(255, 136, 0, .6)
+        }
+
+        .vf-sede {
+            background: #00ccff;
+            box-shadow: 0 0 6px rgba(0, 204, 255, .6)
+        }
+
+        .vf-exaustao {
+            background: #aa55ff;
+            box-shadow: 0 0 6px rgba(170, 85, 255, .6)
+        }
+
+        .vf-crit {
+            background: var(--red) !important;
+            box-shadow: 0 0 8px rgba(255, 34, 68, .8) !important;
+            animation: crit-pulse .8s infinite
+        }
+
+        .vf-warn {
+            background: var(--amber) !important;
+            box-shadow: 0 0 6px rgba(255, 170, 0, .6) !important
+        }
+
+        @keyframes crit-pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .5
+            }
+        }
+
+        .vval {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: #ffffff;
+            text-align: right
+        }
+
+        /* Hex level */
+        .lvl-wrap {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 4px 0
+        }
+
+        .hex-cont {
+            position: relative;
+            width: 56px;
+            height: 56px;
+            flex-shrink: 0
+        }
+
+        .hex-svg {
+            width: 56px;
+            height: 56px;
+            animation: hex-spin 20s linear infinite
+        }
+
+        @keyframes hex-spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .hex-num {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', monospace;
+            font-size: 20px;
+            font-weight: 900;
+            color: var(--holo);
+            text-shadow: var(--glow-sm)
+        }
+
+        .xp-col {
+            flex: 1
+        }
+
+        .xp-lbl {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            margin-bottom: 4px
+        }
+
+        .xp-track {
+            height: 3px;
+            background: rgba(255, 255, 255, .05);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px
+        }
+
+        .xp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--holo2), var(--holo));
+            box-shadow: 0 0 8px rgba(0, 229, 255, .4);
+            border-radius: 2px;
+            transition: width 1s cubic-bezier(.4, 0, .2, 1)
+        }
+
+        .xp-val {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: var(--text-dim);
+            text-align: right
+        }
+
+        .lvlup {
+            margin: 0 16px 10px;
+            padding: 7px 12px;
+            background: rgba(255, 204, 0, .08);
+            border: 1px solid rgba(255, 204, 0, .35);
+            border-radius: 3px;
+            font-family: 'Orbitron', monospace;
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: var(--amber);
+            text-align: center;
+            animation: lvlup-f 1.5s infinite
+        }
+
+        @keyframes lvlup-f {
+
+            0%,
+            100% {
+                box-shadow: none
+            }
+
+            50% {
+                box-shadow: 0 0 15px rgba(255, 170, 0, .3)
+            }
+        }
+
+        /* Attrs */
+        .attrs-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px
+        }
+
+        .attr-h {
+            background: rgba(0, 229, 255, .04);
+            border: 1px solid var(--border2);
+            border-radius: 4px;
+            padding: 6px 4px;
+            text-align: center;
+            transition: all .2s;
+            cursor: default
+        }
+
+        .attr-h:hover {
+            background: rgba(0, 229, 255, .1);
+            border-color: var(--border);
+            box-shadow: 0 0 10px rgba(0, 229, 255, .1)
+        }
+
+        .attr-h .ab {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 1px;
+            color: var(--holo);
+            opacity: .6
+        }
+
+        .attr-h .av {
+            font-family: 'Orbitron', monospace;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.3
+        }
+
+        /* Combat */
+        .combat-p {
+            background: rgba(255, 34, 68, .05);
+            border: 1px solid rgba(255, 34, 68, .2);
+            border-radius: 4px;
+            padding: 10px;
+            animation: c-flicker 4s infinite
+        }
+
+        @keyframes c-flicker {
+
+            0%,
+            97%,
+            100% {
+                border-color: rgba(255, 34, 68, .2)
+            }
+
+            98% {
+                border-color: rgba(255, 34, 68, .6)
+            }
+
+            99% {
+                border-color: rgba(255, 34, 68, .1)
+            }
+        }
+
+        .c-hdr {
+            font-family: 'Orbitron', monospace;
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: var(--red);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .c-hdr::before {
+            content: '◆';
+            animation: blink .6s infinite
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0
+            }
+        }
+
+        .c-name {
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 6px
+        }
+
+        /* Inv */
+        .inv-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border2)
+        }
+
+        .inv-item:last-child {
+            border-bottom: none
+        }
+
+        .inv-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            flex-shrink: 0
+        }
+
+        .inv-dot.usable {
+            background: var(--green);
+            box-shadow: 0 0 5px var(--green)
+        }
+
+        .inv-name {
+            flex: 1;
+            font-size: 12px;
+            color: var(--text)
+        }
+
+        .inv-qty {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--text-dim)
+        }
+
+        .inv-dur {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            color: var(--text-dim)
+        }
+
+
+        /* ── Dado / Last Roll ── */
+        #roll-display {
+            display: none;
+            margin: 8px 0 0 0;
+            padding: 8px 10px;
+            border: 1px solid var(--border2);
+            border-radius: 5px;
+            background: rgba(0, 0, 0, .3);
+        }
+
+        .roll-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .roll-d20 {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 700;
+            min-width: 36px;
+            text-align: center;
+            line-height: 1;
+        }
+
+        .roll-d20.crit {
+            color: var(--green);
+            text-shadow: 0 0 10px var(--green)
+        }
+
+        .roll-d20.falha {
+            color: var(--red);
+            text-shadow: 0 0 10px var(--red)
+        }
+
+        .roll-d20.normal {
+            color: #fff
+        }
+
+        .roll-detail {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: #aaa;
+            line-height: 1.6;
+        }
+
+        .roll-total {
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            color: #fff;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .roll-vs {
+            font-size: 9px;
+            color: #aaa;
+            display: block
+        }
+
+        .roll-pass {
+            color: var(--green)
+        }
+
+        .roll-fail {
+            color: var(--red)
+        }
+
+        /* ── Dice Pool (multi-roll) ── */
+        .dice-pool {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 10px 0 4px;
+        }
+
+        .dice-single {
+            font-family: 'Orbitron', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border2);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, .35);
+            color: var(--text-dim);
+            opacity: 0.35;
+            transition: all .2s;
+        }
+
+        .dice-single.usado {
+            border-color: rgba(0, 255, 136, .45);
+            color: #fff;
+            opacity: 1;
+            box-shadow: 0 0 12px rgba(0, 255, 136, .2);
+        }
+
+        .dice-single.usado.crit {
+            border-color: rgba(0, 255, 136, .75);
+            color: var(--green);
+            box-shadow: 0 0 22px rgba(0, 255, 136, .45);
+        }
+
+        .dice-single.usado.falha {
+            border-color: rgba(255, 68, 68, .75);
+            color: var(--red);
+            box-shadow: 0 0 22px rgba(255, 68, 68, .45);
+        }
+
+        .criterio-tag {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            margin-top: 6px;
+            margin-bottom: 14px;
+        }
+
+        /* Destaque de atributo no HUD quando usado em teste */
+        .attr-h.usado-teste {
+            border-color: rgba(0, 255, 136, .5) !important;
+            background: rgba(0, 255, 136, .07) !important;
+            box-shadow: 0 0 10px rgba(0, 255, 136, .18);
+        }
+
+        .attr-h.usado-teste .ab {
+            color: var(--green) !important;
+        }
+
+        .attr-h.usado-teste .av {
+            color: #fff !important;
+            font-weight: 700;
+        }
+
+        /* ── Center Tabs ── */
+        #center-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border2);
+            margin-bottom: 0;
+            flex-shrink: 0;
+        }
+
+        .ctab {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 2px;
+            color: #aaa;
+            padding: 7px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: color .15s, border-color .15s;
+            background: transparent;
+            border-top: none;
+            border-left: none;
+            border-right: none;
+        }
+
+        .ctab:hover {
+            color: #fff
+        }
+
+        .ctab.active {
+            color: var(--holo);
+            border-bottom-color: var(--holo)
+        }
+
+        #center-panels {
+            flex: 1;
+            overflow: hidden;
+            position: relative
+        }
+
+        .cpanel {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            padding: 14px 16px
+        }
+
+        .cpanel.active {
+            display: block
+        }
+
+        .cpanel::-webkit-scrollbar {
+            width: 3px
+        }
+
+        .cpanel::-webkit-scrollbar-thumb {
+            background: var(--border2)
+        }
+
+        /* ── Map Panel ── */
+        .map-area {
+            border: 1px solid var(--border2);
+            border-radius: 5px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            background: rgba(0, 229, 255, .02);
+        }
+
+        .map-area-nome {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .map-area-status {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 1.5px;
+            color: var(--holo);
+            opacity: .7;
+            margin-bottom: 6px;
+        }
+
+        .map-area-notas {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            color: #888;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }
+
+        .map-poi {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: var(--amber);
+            padding: 2px 0;
+        }
+
+        .map-poi.inativo {
+            color: #555
+        }
+
+        .map-empty {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: #555;
+            padding: 20px 0;
+            text-align: center;
+        }
+
+        /* ── Quest Panel ── */
+        .quest-block {
+            margin-bottom: 16px
+        }
+
+        .quest-tipo {
+            font-family: 'Orbitron', monospace;
+            font-size: 8px;
+            letter-spacing: 2px;
+            color: var(--holo);
+            opacity: .6;
+            margin-bottom: 3px;
+        }
+
+        .quest-nome {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: #fff;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border2);
+        }
+
+        .quest-obj {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 4px 0;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            color: #aaa;
+            line-height: 1.5;
+        }
+
+        .quest-obj.feito {
+            color: #555;
+            text-decoration: line-through
+        }
+
+        .quest-check {
+            flex-shrink: 0;
+            margin-top: 2px
+        }
+
+        .quest-check.done {
+            color: var(--green)
+        }
+
+        .quest-check.todo {
+            color: #444
+        }
+
+        /* ── Modals ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            background: rgba(0, 0, 0, .78);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex
+        }
+
+        .modal-box {
+            background: #080d15;
+            border: 1px solid var(--holo);
+            border-radius: 8px;
+            padding: 26px 22px;
+            width: 340px;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: 0 0 50px rgba(0, 229, 255, .12);
+        }
+
+        .modal-box::-webkit-scrollbar {
+            width: 4px
+        }
+
+        .modal-box::-webkit-scrollbar-thumb {
+            background: var(--border2);
+            border-radius: 2px
+        }
+
+        .modal-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            letter-spacing: 4px;
+            color: var(--holo);
+            margin-bottom: 3px;
+        }
+
+        .modal-sub {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: #aaa;
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border2);
+        }
+
+        .modal-confirm {
+            margin-top: 18px;
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 229, 255, .07);
+            border: 1px solid var(--holo);
+            border-radius: 4px;
+            color: var(--holo);
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+        .modal-confirm:hover {
+            background: rgba(0, 229, 255, .18)
+        }
+
+        .modal-confirm:disabled {
+            opacity: 0.28;
+            cursor: not-allowed
+        }
+
+        /* Attr Modal */
+        .lu-pts-wrap {
+            margin-bottom: 16px
+        }
+
+        .lu-pts-num {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            color: #fff
+        }
+
+        .lu-pts-lbl {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: #aaa;
+            margin-left: 6px
+        }
+
+        .lu-attr-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--border2)
+        }
+
+        .lu-attr-row:last-child {
+            border-bottom: none
+        }
+
+        .lu-attr-name {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: #fff;
+            flex: 1
+        }
+
+        .lu-attr-cur {
+            font-family: 'Orbitron', monospace;
+            font-size: 13px;
+            color: var(--holo);
+            width: 26px;
+            text-align: center
+        }
+
+        .lu-pm {
+            background: transparent;
+            border: 1px solid var(--border2);
+            border-radius: 3px;
+            color: #fff;
+            font-size: 14px;
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: .15s
+        }
+
+        .lu-pm:hover {
+            border-color: var(--holo);
+            background: rgba(0, 229, 255, .08)
+        }
+
+        .lu-pm:disabled {
+            opacity: .2;
+            cursor: not-allowed
+        }
+
+        .lu-added {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--green);
+            width: 20px;
+            text-align: center
+        }
+
+        /* Skill Modal */
+        .sk-card {
+            border: 1px solid var(--border2);
+            border-radius: 5px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: .15s;
+            position: relative
+        }
+
+        .sk-card:hover {
+            border-color: rgba(0, 229, 255, .4);
+            background: rgba(0, 229, 255, .04)
+        }
+
+        .sk-card.selected {
+            border-color: var(--holo);
+            background: rgba(0, 229, 255, .09)
+        }
+
+        .sk-card.selected::after {
+            content: '✓';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--holo);
+            font-size: 14px
+        }
+
+        .sk-nome {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: #fff;
+            margin-bottom: 3px
+        }
+
+        .sk-cat {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 1.5px;
+            opacity: .7;
+            margin-bottom: 5px
+        }
+
+        .sk-efeito {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            color: #aaa;
+            line-height: 1.5
+        }
+
+        .sk-req {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            color: var(--amber);
+            margin-top: 4px
+        }
+
+        .sk-filter {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 14px
+        }
+
+        .sk-filter-btn {
+            background: transparent;
+            border: 1px solid var(--border2);
+            border-radius: 12px;
+            color: #aaa;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 1px;
+            padding: 3px 10px;
+            cursor: pointer;
+            transition: .15s
+        }
+
+        .sk-filter-btn.active {
+            border-color: var(--holo);
+            color: var(--holo);
+            background: rgba(0, 229, 255, .07)
+        }
+
+        .sk-count {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: #aaa;
+            margin-bottom: 14px
+        }
+
+        .sk-count span {
+            color: #fff
+        }
+
+        /* Tags */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            border: 1px solid
+        }
+
+        .tag-clima {
+            border-color: rgba(0, 229, 255, .3);
+            color: var(--holo);
+            background: rgba(0, 229, 255, .06)
+        }
+
+        .tag-period {
+            border-color: rgba(255, 255, 255, .2);
+            color: #cccccc
+        }
+
+        .tag-effect {
+            border-color: rgba(255, 170, 0, .3);
+            color: var(--amber);
+            background: rgba(255, 170, 0, .06)
+        }
+
+        .tag-pass {
+            border-color: rgba(0, 255, 136, .2);
+            color: var(--green);
+            background: rgba(0, 255, 136, .05)
+        }
+
+        /* Chip */
+        .chip-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            background: rgba(0, 229, 255, .04);
+            border: 1px solid var(--border2);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden
+        }
+
+        .chip-row::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 229, 255, .06), transparent);
+            animation: chip-sweep 4s infinite 2s
+        }
+
+        @keyframes chip-sweep {
+            0% {
+                left: -60%
+            }
+
+            100% {
+                left: 160%
+            }
+        }
+
+        .chip-icon {
+            font-size: 12px;
+            color: var(--holo)
+        }
+
+        .chip-name {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 3px;
+            color: var(--holo);
+            opacity: .7;
+            flex: 1
+        }
+
+        .chip-val {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            color: var(--holo);
+            text-shadow: var(--glow-sm)
+        }
+
+        /* Equip */
+        .eq-row {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+            margin-bottom: 5px
+        }
+
+        .eq-icon {
+            font-size: 11px;
+            flex-shrink: 0;
+            margin-top: 1px
+        }
+
+        .eq-name {
+            font-size: 12px;
+            color: var(--text)
+        }
+
+        /* CENTER */
+        #center {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative
+        }
+
+        #narr-wrap {
+            flex: 1;
+            overflow: hidden;
+            position: relative
+        }
+
+        #narr-scroll {
+            height: 100%;
+            overflow-y: auto;
+            padding: 36px 52px;
+            scroll-behavior: smooth
+        }
+
+        #narr-scroll::-webkit-scrollbar {
+            width: 3px
+        }
+
+        #narr-scroll::-webkit-scrollbar-thumb {
+            background: rgba(0, 229, 255, .15);
+            border-radius: 2px
+        }
+
+        #narr-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 15.5px;
+            font-weight: 300;
+            line-height: 2;
+            color: rgba(200, 232, 250, .88);
+            letter-spacing: .2px;
+            max-width: 780px;
+            margin: 0 auto;
+            white-space: pre-wrap
+        }
+
+        .chip-quote {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--holo);
+            opacity: .8;
+            background: rgba(0, 229, 255, .05);
+            border-left: 2px solid var(--holo);
+            padding: 4px 10px;
+            margin: 4px 0;
+            display: inline-block;
+            border-radius: 0 4px 4px 0
+        }
+
+        #narr-wrap::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(2, 4, 10, .8) 0%, transparent 100%);
+            z-index: 2;
+            pointer-events: none
+        }
+
+        .empty-narr {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 20px;
+            opacity: .4
+        }
+
+        .empty-hex {
+            width: 80px;
+            height: 80px;
+            animation: e-spin 8s linear infinite
+        }
+
+        @keyframes e-spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        .empty-txt {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 2
+        }
+
+        /* Loading */
+        #loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(2, 4, 10, .94);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            z-index: 20;
+            backdrop-filter: blur(4px)
+        }
+
+        #loading-overlay.show {
+            display: flex
+        }
+
+        .ldr-wrap {
+            position: relative;
+            width: 80px;
+            height: 80px
+        }
+
+        .ldr-wrap svg {
+            position: absolute;
+            inset: 0
+        }
+
+        .ldr-outer {
+            animation: spin-cw 1.2s linear infinite
+        }
+
+        .ldr-inner {
+            animation: spin-ccw 1.8s linear infinite
+        }
+
+        @keyframes spin-cw {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        @keyframes spin-ccw {
+            to {
+                transform: rotate(-360deg)
+            }
+        }
+
+        .ldr-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', monospace;
+            font-size: 20px;
+            font-weight: 900;
+            color: var(--holo);
+            text-shadow: var(--glow-sm)
+        }
+
+        .ldr-steps {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            text-align: center;
+            line-height: 2;
+            letter-spacing: 1px
+        }
+
+        .step-done {
+            color: var(--green)
+        }
+
+        .step-active {
+            color: var(--holo);
+            animation: blink 1s infinite
+        }
+
+        .step-wait {
+            color: var(--text-dim)
+        }
+
+        /* Action bar */
+        #action-bar {
+            border-top: 1px solid var(--border);
+            background: linear-gradient(0deg, rgba(0, 10, 25, .98) 0%, rgba(2, 8, 20, .95) 100%);
+            padding: 14px 52px 16px;
+            flex-shrink: 0;
+            position: relative
+        }
+
+        #action-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--holo), transparent);
+            opacity: .4
+        }
+
+        #ab-label {
+            font-family: 'Orbitron', monospace;
+            font-size: 9px;
+            letter-spacing: 5px;
+            color: var(--holo);
+            opacity: .4;
+            margin-bottom: 12px
+        }
+
+        #opts-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            max-height: 320px;
+            overflow-y: auto
+        }
+
+        #opts-grid::-webkit-scrollbar {
+            width: 2px
+        }
+
+        #opts-grid::-webkit-scrollbar-thumb {
+            background: var(--border)
+        }
+
+        .opt-sep {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 4px;
+            color: var(--text-dim);
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border2);
+            opacity: .6
+        }
+
+        .opt-btn {
+            background: transparent;
+            border: 1px solid rgba(0, 229, 255, .1);
+            border-radius: 4px;
+            padding: 9px 16px;
+            min-height: 38px;
+            color: var(--text-mid);
+            font-family: 'Inter', sans-serif;
+            font-size: 13.5px;
+            font-weight: 400;
+            letter-spacing: .3px;
+            text-align: left;
+            cursor: pointer;
+            transition: all .18s cubic-bezier(.4, 0, .2, 1);
+            position: relative;
+            overflow: visible;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.4
+        }
+
+        .opt-btn::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 20%;
+            bottom: 20%;
+            width: 2px;
+            background: var(--holo);
+            opacity: 0;
+            transition: opacity .15s;
+            border-radius: 2px
+        }
+
+        .opt-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(0, 229, 255, .04), transparent);
+            transform: translateX(-100%);
+            transition: transform .4s
+        }
+
+        .opt-btn:hover {
+            background: rgba(0, 229, 255, .06);
+            border-color: rgba(0, 229, 255, .3);
+            color: var(--holo);
+            box-shadow: 0 0 20px rgba(0, 229, 255, .08);
+            transform: translateX(3px)
+        }
+
+        .opt-btn:hover::before {
+            opacity: 1
+        }
+
+        .opt-btn:hover::after {
+            transform: translateX(100%)
+        }
+
+        .opt-btn:active {
+            transform: translateX(5px)
+        }
+
+        .opt-btn.narr-btn {
+            border-color: rgba(0, 229, 255, .18);
+            color: var(--text)
+        }
+
+        .opt-btn.narr-btn:hover {
+            color: var(--holo);
+            border-color: rgba(0, 229, 255, .5);
+            box-shadow: 0 0 24px rgba(0, 229, 255, .12)
+        }
+
+        .opt-btn.sys-btn {
+            font-size: 11px;
+            color: var(--text-dim);
+            padding: 5px 16px;
+            border-color: transparent
+        }
+
+        .opt-btn.sys-btn:hover {
+            color: var(--text-mid)
+        }
+
+        .opt-btn:disabled {
+            opacity: .25;
+            cursor: not-allowed;
+            pointer-events: none
+        }
+
+        /* ── LOG botão flutuante ── */
+        #log-btn {
+            position: fixed;
+            top: 13px;
+            right: 20px;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 11px;
+            background: rgba(2, 8, 20, .92);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            cursor: pointer;
+            user-select: none;
+            transition: color .18s, border-color .18s, box-shadow .18s
+        }
+
+        #log-btn:hover {
+            color: var(--holo);
+            border-color: rgba(0, 229, 255, .4);
+            box-shadow: 0 0 14px rgba(0, 229, 255, .12)
+        }
+
+        #log-btn.active {
+            color: var(--holo);
+            border-color: rgba(0, 229, 255, .5);
+            box-shadow: 0 0 18px rgba(0, 229, 255, .18)
+        }
+
+        .log-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--holo);
+            box-shadow: 0 0 6px var(--holo);
+            flex-shrink: 0
+        }
+
+        #log-overlay {
+            position: fixed;
+            top: 44px;
+            right: 14px;
+            width: 340px;
+            max-height: calc(100vh - 60px);
+            background: rgba(2, 8, 20, .97);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .6);
+            display: flex;
+            flex-direction: column;
+            z-index: 10000;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-6px);
+            transition: opacity .2s, transform .2s cubic-bezier(.4, 0, .2, 1)
+        }
+
+        #log-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0)
+        }
+
+        #log-panel-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 8px;
+            letter-spacing: 4px;
+            color: var(--holo);
+            opacity: .5;
+            border-bottom: 1px solid var(--border2);
+            padding: 12px 16px 8px;
+            flex-shrink: 0
+        }
+
+        #log-scroll {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px 16px 12px
+        }
+
+        #log-scroll::-webkit-scrollbar {
+            width: 2px
+        }
+
+        #log-scroll::-webkit-scrollbar-thumb {
+            background: var(--border)
+        }
+
+        .log-line {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            line-height: 1.7;
+            color: var(--text-dim);
+            word-break: break-all;
+            padding: 1px 4px;
+            border-radius: 2px
+        }
+
+        .log-line.ok {
+            color: var(--green)
+        }
+
+        .log-line.err {
+            color: var(--red)
+        }
+
+        .log-line.warn {
+            color: var(--amber)
+        }
+
+        .log-line.info {
+            color: var(--holo);
+            background: rgba(0, 229, 255, .04)
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- HEADER -->
+    <div id="header">
+        <div>
+            <div class="logo">CHRONOS-7</div>
+            <div class="logo-sub">COCKPIT INTERFACE v4.0</div>
+        </div>
+        <div class="hdiv"></div>
+        <div id="status-pill">
+            <div id="status-dot"></div>
+            <div id="status-text">INICIALIZANDO</div>
+        </div>
+        <div id="cap-bar">
+            <div class="cap-item">
+                <div class="label">CAPÍTULO</div>
+                <div class="value" id="h-cap">—</div>
+            </div>
+            <div class="hdiv"></div>
+            <div class="cap-item" style="text-align:left;max-width:220px">
+                <div class="label">TÍTULO</div>
+                <div class="value" id="h-titulo" style="font-size:10px;opacity:.8">—</div>
+            </div>
+            <div class="hdiv"></div>
+            <div class="cap-item">
+                <div class="label">ARCO</div>
+                <div class="value" id="h-arco" style="font-size:10px">—</div>
+            </div>
+            <div class="hdiv"></div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <div class="inter-ring">
+                    <svg viewBox="0 0 32 32" width="32" height="32">
+                        <circle class="ir-track" cx="16" cy="16" r="12" />
+                        <circle class="ir-fill" id="inter-fill" cx="16" cy="16" r="12" stroke-dasharray="75.4"
+                            stroke-dashoffset="75.4" />
+                    </svg>
+                </div>
+                <div>
+                    <div
+                        style="font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:3px;color:var(--text-dim)">
+                        INT</div>
+                    <div class="value" id="h-inter" style="font-size:13px">0/25</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="main">
+
+        <!-- HUD -->
+        <div id="hud">
+
+            <div class="hud-s">
+                <div class="chip-row">
+                    <span class="chip-icon">◈</span>
+                    <span class="chip-name">CHRONOS-7 ALPHA</span>
+                    <span class="chip-val" id="chip-val">—%</span>
+                </div>
+            </div>
+
+            <div class="hud-s">
+                <div class="hud-t">VITALS</div>
+                <div class="vrow"><span class="vlabel">HP</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-hp" id="bar-hp" style="width:0%"></div>
+                    </div><span class="vval" id="val-hp">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">OXIGÊNIO</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-o2" id="bar-o2" style="width:0%"></div>
+                    </div><span class="vval" id="val-o2">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">ENERGIA</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-en" id="bar-en" style="width:0%"></div>
+                    </div><span class="vval" id="val-en">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">CASCO</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-hull" id="bar-hull" style="width:0%"></div>
+                    </div><span class="vval" id="val-hull">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">TRAJE</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-suit" id="bar-suit" style="width:0%"></div>
+                    </div><span class="vval" id="val-suit">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">FOME</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-fome" id="bar-fome" style="width:100%"></div>
+                    </div><span class="vval" id="val-fome">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">SEDE</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-sede" id="bar-sede" style="width:100%"></div>
+                    </div><span class="vval" id="val-sede">—</span>
+                </div>
+                <div class="vrow"><span class="vlabel">EXAUSTÃO</span>
+                    <div class="vtrack">
+                        <div class="vfill vf-exaustao" id="bar-exaustao" style="width:100%"></div>
+                    </div><span class="vval" id="val-exaustao">—</span>
+                </div>
+            </div>
+
+            <div class="hud-s">
+                <div class="hud-t">PROGRESSÃO</div>
+                <div class="lvl-wrap">
+                    <div class="hex-cont">
+                        <svg class="hex-svg" viewBox="0 0 56 56">
+                            <polygon points="28,4 50,16 50,40 28,52 6,40 6,16" fill="none" stroke="rgba(0,229,255,.15)"
+                                stroke-width="1" />
+                            <polygon points="28,8 46,18 46,38 28,48 10,38 10,18" fill="none"
+                                stroke="rgba(0,229,255,.25)" stroke-width=".5" stroke-dasharray="3,4" />
+                        </svg>
+                        <div class="hex-num" id="level-num">1</div>
+                    </div>
+                    <div class="xp-col">
+                        <div class="xp-lbl">EXPERIÊNCIA</div>
+                        <div class="xp-track">
+                            <div class="xp-fill" id="bar-xp" style="width:0%"></div>
+                        </div>
+                        <div class="xp-val" id="xp-val">0 / 100</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="lvlup-wrap" style="display:none">
+                <div class="lvlup" id="lu-attr-btn" style="cursor:pointer;display:none" onclick="openAttrModal()">▲
+                    LEVEL UP — DISTRIBUIR PONTOS</div>
+                <div class="lvlup" id="lu-skill-btn" style="cursor:pointer;display:none;margin-top:6px"
+                    onclick="openSkillModal()">🎓 HABILIDADE PASSIVA — ESCOLHER</div>
+            </div>
+            <div id="roll-display">
+                <div class="roll-row">
+                    <div class="roll-d20 normal" id="roll-num">—</div>
+                    <div class="roll-detail">
+                        <span id="roll-expr">—</span><br>
+                        <span id="roll-action" style="color:#666">—</span>
+                    </div>
+                    <div class="roll-total">
+                        <span id="roll-total-num">—</span>
+                        <span class="roll-vs" id="roll-vs">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hud-s">
+                <div class="hud-t">ATRIBUTOS</div>
+                <div class="attrs-grid" id="attrs-grid"></div>
+            </div>
+
+            <div class="hud-s">
+                <div class="hud-t">AMBIENTE</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                    <span class="tag tag-clima" id="tag-clima">—</span>
+                    <span class="tag tag-period" id="tag-period">—</span>
+                </div>
+                <div class="eq-row"><span class="eq-icon">⚔</span><span class="eq-name" id="eq-weapon">—</span></div>
+                <div class="eq-row"><span class="eq-icon">🛡</span><span class="eq-name" id="eq-armor">—</span></div>
+            </div>
+
+            <div class="hud-s" id="combat-sec" style="display:none">
+                <div class="combat-p">
+                    <div class="c-hdr">COMBATE ATIVO — T<span id="c-turno">0</span></div>
+                    <div class="c-name" id="c-nome">—</div>
+                    <div class="vrow">
+                        <span class="vlabel" style="color:var(--red)">HP</span>
+                        <div class="vtrack">
+                            <div class="vfill vf-crit" id="bar-ehp" style="width:0%"></div>
+                        </div>
+                        <span class="vval" id="val-ehp">—</span>
+                    </div>
+                    <div
+                        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);margin-top:4px">
+                        POS: <span id="c-pos" style="color:var(--amber)">—</span></div>
+                </div>
+            </div>
+
+            <div class="hud-s" id="effects-sec" style="display:none">
+                <div class="hud-t">STATUS</div>
+                <div id="effects-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+
+            <div class="hud-s" id="pass-sec" style="display:none">
+                <div class="hud-t">PASSIVAS</div>
+                <div id="pass-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+
+            <div class="hud-s">
+                <div class="hud-t">INVENTÁRIO</div>
+                <div id="inv-list">
+                    <div
+                        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);padding:6px 0">
+                        VAZIO</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- CENTRO -->
+        <div id="center">
+            <div id="center-tabs">
+                <button class="ctab active" id="tab-narr" onclick="switchTab('narr')">NARRATIVA</button>
+                <button class="ctab" id="tab-mapa" onclick="switchTab('mapa')">MAPA</button>
+                <button class="ctab" id="tab-quest" onclick="switchTab('quest')">MISSÕES</button>
+                <button class="ctab" id="tab-dados" onclick="switchTab('dados')">DADOS</button>
+            </div>
+            <div id="center-panels">
+                <div class="cpanel active" id="panel-narr" style="padding:0;height:100%">
+                    <div id="narr-wrap" style="height:100%">
+                        <div id="narr-scroll">
+                            <div id="narr-text">
+                                <div class="empty-narr">
+                                    <svg class="empty-hex" viewBox="0 0 80 80">
+                                        <polygon points="40,6 70,22 70,58 40,74 10,58 10,22" fill="none"
+                                            stroke="rgba(0,229,255,.2)" stroke-width="1" />
+                                        <polygon points="40,14 62,26 62,54 40,66 18,54 18,26" fill="none"
+                                            stroke="rgba(0,229,255,.1)" stroke-width="1" stroke-dasharray="5,5" />
+                                        <circle cx="40" cy="40" r="8" fill="none" stroke="rgba(0,229,255,.3)"
+                                            stroke-width="1" />
+                                    </svg>
+                                    <div class="empty-txt">CHIP CHRONOS-7 ONLINE<br>AGUARDANDO PRIMEIRA AÇÃO</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="loading-overlay">
+                            <div class="ldr-wrap">
+                                <svg class="ldr-outer" viewBox="0 0 80 80" width="80" height="80">
+                                    <polygon points="40,4 72,22 72,58 40,76 8,58 8,22" fill="none"
+                                        stroke="rgba(0,229,255,.5)" stroke-width="1.5" stroke-dasharray="8,4" />
+                                </svg>
+                                <svg class="ldr-inner" style="position:absolute;inset:10px" viewBox="0 0 60 60"
+                                    width="60" height="60">
+                                    <polygon points="30,4 54,18 54,42 30,56 6,42 6,18" fill="none"
+                                        stroke="rgba(0,229,255,.3)" stroke-width="1" stroke-dasharray="5,6" />
+                                </svg>
+                                <div class="ldr-center">⬡</div>
+                            </div>
+                            <div class="ldr-steps" id="ldr-steps"></div>
+                        </div>
+                    </div>
+                </div><!-- /panel-narr -->
+
+                <div class="cpanel" id="panel-mapa">
+                    <div id="map-list">
+                        <div class="map-empty">Nenhuma área descoberta ainda.</div>
+                    </div>
+                </div>
+
+                <div class="cpanel" id="panel-quest">
+                    <div id="quest-list">
+                        <div class="map-empty">Nenhuma missão ativa.</div>
+                    </div>
+                </div>
+
+                <div class="cpanel" id="panel-dados">
+                    <div style="padding:28px 16px;text-align:center">
+                        <div id="dados-empty"
+                            style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);padding:40px 0;opacity:.5">
+                            SEM ROLAGEM REGISTRADA<br>
+                            <span style="font-size:8px;opacity:.6">Execute uma ação para ver os dados</span>
+                        </div>
+                        <div id="dados-content" style="display:none">
+                            <!-- dado principal grande -->
+                            <div style="display:flex;align-items:center;justify-content:center;margin-bottom:12px">
+                                <div id="dados-d20-big"
+                                    style="font-family:'Orbitron',monospace;font-size:80px;font-weight:700;line-height:1;color:#fff;padding:16px 24px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,.4);transition:color .3s,text-shadow .3s,border-color .3s">
+                                    —</div>
+                            </div>
+                            <!-- pool de dados do multi-roll: cubinhos lado a lado, depois tag ▲/▼ -->
+                            <div class="dice-pool" id="dados-pool" style="display:none"></div>
+                            <div class="criterio-tag" id="dados-criterio" style="display:none"></div>
+                            <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:#aaa;margin-bottom:10px;letter-spacing:2px"
+                                id="dados-expr">—</div>
+                            <div style="font-family:'Orbitron',monospace;font-size:18px;margin-bottom:20px;letter-spacing:1px"
+                                id="dados-result">—</div>
+                            <div style="font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:4px;color:var(--text-dim);border-top:1px solid var(--border2);padding-top:10px"
+                                id="dados-action">ÚLTIMO TESTE</div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /center-panels -->
+
+            <div id="action-bar">
+                <div id="ab-label">O QUE VOCÊ FAZ?</div>
+                <div id="opts-grid">
+                    <div
+                        style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);padding:8px">
+                        Carregando...</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- LOG flutuante — fora do #main para position:fixed funcionar -->
+    <button id="log-btn" onclick="toggleLog()">
+        <span class="log-dot"></span>LOG
+    </button>
+    <div id="log-overlay">
+        <div id="log-panel-title">PIPELINE LOG</div>
+        <div id="log-scroll"></div>
+    </div>
+
+    <script>
+        // Partículas
+        (function () {
+            const cv = document.getElementById('particles-canvas'), cx = cv.getContext('2d');
+            let W, H, pts = [];
+            function resize() { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight }
+            function P() { this.x = Math.random() * W; this.y = Math.random() * H; this.s = Math.random() * 1.2 + .3; this.vx = (Math.random() - .5) * .25; this.vy = (Math.random() - .5) * .25; this.op = Math.random() * .4 + .1; this.ph = Math.random() * Math.PI * 2 }
+            function init() { resize(); pts = []; for (let i = 0; i < 80; i++)pts.push(new P()) }
+            function draw() {
+                cx.clearRect(0, 0, W, H);
+                pts.forEach(p => { p.ph += .012; const o = p.op * (.6 + .4 * Math.sin(p.ph)); cx.beginPath(); cx.arc(p.x, p.y, p.s, 0, Math.PI * 2); cx.fillStyle = `rgba(0,229,255,${o})`; cx.fill(); p.x += p.vx; p.y += p.vy; if (p.x < 0) p.x = W; if (p.x > W) p.x = 0; if (p.y < 0) p.y = H; if (p.y > H) p.y = 0 });
+                requestAnimationFrame(draw)
+            }
+            window.addEventListener('resize', init); init(); draw();
+        })();
+
+        let busy = false, logOpen = false;
+        function toggleLog() { logOpen = !logOpen; document.getElementById('log-overlay').classList.toggle('open', logOpen); document.getElementById('log-btn').classList.toggle('active', logOpen); }
+
+        function pct(a, b) { return b > 0 ? Math.min(100, a / b * 100) : 0 }
+
+        function applyBar(bid, vid, cur, max, fmt) {
+            const p = pct(cur, max), bar = document.getElementById(bid), val = document.getElementById(vid);
+            if (!bar || !val) return;
+            bar.style.width = p + '%';
+            const base = bar.className.split(' ').find(c => c.startsWith('vf-') && c !== 'vf-crit' && c !== 'vf-warn') || 'vf-hp';
+            bar.className = 'vfill ' + (p <= 20 ? 'vf-crit' : p <= 40 ? 'vf-warn' : base);
+            val.textContent = fmt || `${cur}/${max}`;
+            val.style.color = p <= 20 ? 'var(--red)' : p <= 40 ? 'var(--amber)' : 'var(--text-mid)';
+        }
+
+        function updateHUD(s) {
+            const c = s.character, w = s.world, cb = s.combat, inv = s.inventory || [];
+            document.getElementById('chip-val').textContent = (c.chip_carga || 0) + '%';
+            applyBar('bar-hp', 'val-hp', c.hp_cur, c.hp_max);
+            applyBar('bar-o2', 'val-o2', c.o2, 100, c.o2 + '%');
+            applyBar('bar-en', 'val-en', c.energy, 100, c.energy + '%');
+            applyBar('bar-hull', 'val-hull', c.hull, 100, c.hull + '%');
+            applyBar('bar-suit', 'val-suit', c.suit, 100, c.suit + '%');
+            applyBar('bar-fome', 'val-fome', c.fome ?? 100, 100, (c.fome ?? 100) + '%');
+            applyBar('bar-sede', 'val-sede', c.sede ?? 100, 100, (c.sede ?? 100) + '%');
+            applyBar('bar-exaustao', 'val-exaustao', c.exaustao ?? 100, 100, (c.exaustao ?? 100) + '%');
+            document.getElementById('level-num').textContent = c.level;
+            document.getElementById('bar-xp').style.width = pct(c.xp_cur, c.xp_next) + '%';
+            document.getElementById('xp-val').textContent = `${c.xp_cur} / ${c.xp_next}`;
+            const hasLvlUp = c.level_up_pending || c.skill_pending;
+            document.getElementById('lvlup-wrap').style.display = hasLvlUp ? 'block' : 'none';
+            document.getElementById('lu-attr-btn').style.display = c.level_up_pending ? 'block' : 'none';
+            document.getElementById('lu-skill-btn').style.display = c.skill_pending ? 'block' : 'none';
+            window._luPts = c.attr_pts || 0;
+            window._luAttrs = c.attrs || [];
+            window._availableSkills = c.available_skills || [];
+            window._skillChoicesCount = c.skill_choices_count || 1;
+            document.getElementById('attrs-grid').innerHTML = (c.attrs || []).map(a => `<div class="attr-h"><div class="ab">${a.abbr}</div><div class="av">${a.value}</div></div>`).join('');
+            const _clean = v => (!v || v === 'None' || v === 'null' || v === 'none') ? '—' : v;
+            document.getElementById('tag-clima').textContent = w.clima;
+            document.getElementById('tag-period').textContent = w.periodo;
+            document.getElementById('eq-weapon').textContent = _clean(c.weapon);
+            document.getElementById('eq-armor').textContent = _clean(c.armor);
+            document.getElementById('h-cap').textContent = w.capitulo;
+            document.getElementById('h-titulo').textContent = w.titulo || '—';
+            document.getElementById('h-arco').textContent = w.arco || '—';
+            document.getElementById('h-inter').textContent = `${w.interacoes}/25`;
+            const circ = 2 * Math.PI * 12;
+            document.getElementById('inter-fill').style.strokeDashoffset = circ * (1 - pct(w.interacoes, 25) / 100);
+            const cs = document.getElementById('combat-sec');
+            if (cb.ativo) {
+                cs.style.display = 'block';
+                document.getElementById('c-nome').textContent = cb.nome || 'Inimigo';
+                document.getElementById('c-turno').textContent = cb.turno;
+                document.getElementById('c-pos').textContent = cb.posicao;
+                document.getElementById('val-ehp').textContent = `${cb.hp_cur}/${cb.hp_max}`;
+                document.getElementById('bar-ehp').style.width = pct(cb.hp_cur, cb.hp_max) + '%';
+            } else { cs.style.display = 'none' }
+            const ef = c.status_effects || [];
+            const es = document.getElementById('effects-sec');
+            if (ef.length) { es.style.display = 'block'; document.getElementById('effects-list').innerHTML = ef.map(e => `<span class="tag tag-effect">${e.id}×${e.stacks}</span>`).join('') } else { es.style.display = 'none' }
+            const ps = c.passivas || [];
+            const pss = document.getElementById('pass-sec');
+            if (ps.length) { pss.style.display = 'block'; document.getElementById('pass-list').innerHTML = ps.map(p => `<span class="tag tag-pass">${p}</span>`).join('') } else { pss.style.display = 'none' }
+            const il = document.getElementById('inv-list');
+            if (!inv.length) { il.innerHTML = '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:var(--text-dim);padding:6px 0">VAZIO</div>' }
+            else { il.innerHTML = inv.map(i => `<div class="inv-item"><div class="inv-dot${i.usable ? ' usable' : ''}"></div><span class="inv-name">${i.name}</span>${i.durability && i.dur_max ? `<span class="inv-dur">[${i.durability}/${i.dur_max}]</span>` : ''}<span class="inv-qty">×${i.qty}</span></div>`).join('') }
+            // Roll display — sempre atualiza (limpa dado velho se não houve rolagem)
+            if (s.last_roll && s.last_roll.dado) {
+                updateRoll(s.last_roll);
+                // Auto-switch para DADOS tab para o usuário ver o resultado
+                switchTab('dados');
+            } else {
+                // Nenhuma rolagem neste turno: limpa display para não mostrar dado velho
+                updateRoll(null);
+            }
+            // Map & Quests
+            if (s.mapa) renderMap(s.mapa);
+            if (s.quests) renderQuests(s.quests);
+        }
+
+        function updateOptions(opts) {
+            const g = document.getElementById('opts-grid'); g.innerHTML = '';
+            let narrCount = 0;
+            opts.forEach(o => {
+                if (o.type === 'separator') { const s = document.createElement('div'); s.className = 'opt-sep'; s.textContent = o.label.replace(/[─]+/g, '').trim(); g.appendChild(s); return }
+                // U-90: exatamente 3 opções narrativas do GM
+                if (o.narrative) { narrCount++; if (narrCount > 3) return; }
+                const b = document.createElement('button'); b.className = 'opt-btn';
+                if (o.narrative) b.classList.add('narr-btn');
+                if (o.type === 'checkpoint_save' || o.type === 'arc_check') b.classList.add('sys-btn');
+                b.textContent = o.label; b.disabled = busy;
+                b.addEventListener('click', () => doAction(o)); g.appendChild(b);
+            });
+        }
+
+        function clearLog() { document.getElementById('log-scroll').innerHTML = '' }
+        function appendLog(lines) {
+            const el = document.getElementById('log-scroll');
+            lines.forEach(l => {
+                const d = document.createElement('div'); d.className = 'log-line';
+                if (l.startsWith('✓')) d.classList.add('ok');
+                else if (l.startsWith('✗') || l.toLowerCase().includes('erro')) d.classList.add('err');
+                else if (l.startsWith('⚠')) d.classList.add('warn');
+                else if (l.startsWith('▶') || l.startsWith('💾') || l.startsWith('⚙')) d.classList.add('info');
+                d.textContent = l; el.appendChild(d);
+            });
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function setNarrative(text) {
+            if (!text || !text.trim()) return;
+            const el = document.getElementById('narr-text');
+            el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+            el.innerHTML = text.replace(/\[CHRONOS-7[^\]]*\]/g, m => `<span class="chip-quote">${m}</span>`).replace(/\n/g, '<br>');
+            el.style.transition = 'opacity .5s ease,transform .5s ease';
+            requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)' });
+            document.getElementById('narr-scroll').scrollTop = 0;
+        }
+
+        function extractNarrative(scene) {
+            if (!scene) return '';
+            const up = scene.toUpperCase();
+            const i2 = up.indexOf('PARTE 2');
+            const i3 = up.indexOf('PARTE 3');
+
+            // Se não tem PARTE 2, verifica se tem só PARTE 1 (truncamento)
+            if (i2 === -1) {
+                const i1 = up.indexOf('PARTE 1');
+                if (i1 !== -1) {
+                    return '[Resposta incompleta — o modelo foi interrompido antes da narrativa. Tente a ação novamente.]';
+                }
+                return scene; // retorna tudo se não tem nenhum marcador
+            }
+
+            let block = (i3 > i2) ? scene.slice(i2, i3) : scene.slice(i2);
+            const lines = block.split('\n');
+            const content = lines.filter((l, i) => {
+                if (i === 0) return false;
+                const t = l.trim();
+                return !t.startsWith('**PARTE') && t !== '---';
+            });
+            const result = content.join('\n').replace(/^---+\s*\n/gm, '').trim();
+            return result || '[Narrativa vazia — tente novamente.]';
+        }
+
+        const STEPS = ['Passo 1 — System Engine', 'Passo 1.5 — World Ticker', 'Passo 2 — Architect', 'Passo 3 — Game Master (Gemini)', 'Passo 3.5 — Scene Processor', 'Passo 4 — Lore Archivist (Gemini)'];
+        let ldrStep = 0, ldrTimer = null;
+        function startLoader() { ldrStep = 0; document.getElementById('loading-overlay').classList.add('show'); renderLdr(); ldrTimer = setInterval(() => { if (ldrStep < STEPS.length - 1) { ldrStep++; renderLdr() } }, 3500) }
+        function renderLdr() { document.getElementById('ldr-steps').innerHTML = STEPS.map((s, i) => i < ldrStep ? `<div class="step-done">✓ ${s}</div>` : i === ldrStep ? `<div class="step-active">⚙ ${s}</div>` : `<div class="step-wait">· ${s}</div>`).join('') }
+        function stopLoader() { clearInterval(ldrTimer); document.getElementById('loading-overlay').classList.remove('show') }
+
+        function setStatus(t, s = 'idle') { document.getElementById('status-text').textContent = t; document.getElementById('status-dot').className = s === 'busy' ? 'busy' : s === 'error' ? 'error' : '' }
+
+        async function doAction(opt) {
+            if (busy) return; busy = true; clearLog(); setStatus('EXECUTANDO', 'busy'); startLoader();
+            document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+            try {
+                const r = await fetch('/api/turn', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: opt.type, action_label: opt.action_label || opt.label, cmd: opt.cmd || null }) });
+                const d = await r.json();
+                if (d.log) appendLog(d.log);
+                // 503 Gemini overload — turno revertido, não atualiza HUD
+                if (r.status === 503 || d.error === 'gemini_503') {
+                    setStatus('GEMINI OCUPADO', 'error');
+                    appendLog(['⚠ Gemini sobrecarregado (503) — turno NÃO contabilizado.', '  Aguarde alguns segundos e tente novamente.']);
+                    return;
+                }
+                if (d.state) updateHUD(d.state);
+                if (d.options) updateOptions(d.options);
+                if (d.scene) setNarrative(extractNarrative(d.scene));
+                if (d.error) appendLog([`✗ ${d.error}`]);
+            } catch (e) { appendLog([`✗ Rede: ${e}`]); setStatus('ERRO', 'error') }
+            finally { stopLoader(); if (document.getElementById('status-text').textContent === 'EXECUTANDO') setStatus('PRONTO', 'idle'); busy = false; document.querySelectorAll('.opt-btn').forEach(b => b.disabled = false) }
+        }
+
+        async function loadState() {
+            setStatus('CONECTANDO', 'busy');
+            try {
+                const r = await fetch('/api/state'), d = await r.json();
+                if (d.state) updateHUD(d.state);
+                if (d.options) updateOptions(d.options);
+                if (d.narrative && d.narrative.trim()) setNarrative(d.narrative);
+                setStatus('PRONTO', 'idle');
+            } catch (e) {
+                setStatus('OFFLINE', 'error');
+                document.getElementById('opts-grid').innerHTML = '<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:var(--red);padding:10px;line-height:2">✗ SERVIDOR OFFLINE<br>Execute web_server.py</div>';
+            }
+        }
+        loadState();
+        // Fecha log ao clicar fora
+        document.addEventListener('click', function (e) {
+            const btn = document.getElementById('log-btn'), ov = document.getElementById('log-overlay');
+            if (logOpen && ov && btn && !ov.contains(e.target) && !btn.contains(e.target)) {
+                logOpen = false; ov.classList.remove('open'); btn.classList.remove('active');
+            }
+        });
+    </script>
+
+    <!-- ── Modals ── -->
+    <div class="modal-overlay" id="attr-modal">
+        <div class="modal-box">
+            <div class="modal-title">▲ LEVEL UP</div>
+            <div class="modal-sub">Distribua seus pontos de atributo</div>
+            <div class="lu-pts-wrap">
+                <span class="lu-pts-num" id="lu-pts-left">0</span>
+                <span class="lu-pts-lbl">pontos disponíveis</span>
+            </div>
+            <div id="lu-attrs-list"></div>
+            <button class="modal-confirm" id="lu-confirm" disabled onclick="confirmAttrs()">CONFIRMAR</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="skill-modal">
+        <div class="modal-box">
+            <div class="modal-title">🎓 HABILIDADE PASSIVA</div>
+            <div class="modal-sub" id="sk-sub">Escolha 1 habilidade</div>
+            <div class="sk-count">Selecionadas: <span id="sk-sel-count">0</span> / <span id="sk-max-count">1</span>
+            </div>
+            <div class="sk-filter" id="sk-filter-row"></div>
+            <div id="sk-list"></div>
+            <button class="modal-confirm" id="sk-confirm" disabled onclick="confirmSkills()">CONFIRMAR</button>
+        </div>
+    </div>
+
+    <script>
+        // ════════ TABS ════════
+        function switchTab(tab) {
+            ['narr', 'mapa', 'quest', 'dados'].forEach(t => {
+                document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+                document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+            });
+        }
+        // refreshState alias
+        async function refreshState() { await loadState(); }
+
+        // ════════ ROLL DISPLAY ════════
+        function updateRoll(r) {
+            // ── Mini HUD esquerdo ──
+            const el = document.getElementById('roll-display');
+            if (el) { el.style.display = (!r || !r.dado) ? 'none' : 'block'; }
+
+            // ── Aba DADOS — empty state ──
+            const emptyEl = document.getElementById('dados-empty');
+            const contentEl = document.getElementById('dados-content');
+            if (!r || !r.dado) {
+                if (emptyEl) emptyEl.style.display = 'block';
+                if (contentEl) contentEl.style.display = 'none';
+                // Remove destaque de atributo
+                document.querySelectorAll('.attr-h.usado-teste').forEach(e => e.classList.remove('usado-teste'));
+                return;
+            }
+
+            const isCrit = r.dado === 20, isFail = r.dado === 1;
+
+            // ── Mini HUD: dado + expressão ──
+            const numEl = document.getElementById('roll-num');
+            if (numEl) { numEl.textContent = r.dado; numEl.className = 'roll-d20 ' + (isCrit ? 'crit' : isFail ? 'falha' : 'normal'); }
+            const exprEl = document.getElementById('roll-expr');
+            if (exprEl) {
+                const attrLabel = r.attr_nome ? `(${r.attr_nome})` : '';
+                exprEl.textContent = r.bonus != null
+                    ? `d20(${r.dado}) + ${r.bonus}${attrLabel} = ${r.total}`
+                    : `d20 = ${r.dado}`;
+            }
+            const actEl = document.getElementById('roll-action');
+            if (actEl) actEl.textContent = 'ÚLTIMO TESTE';
+            const tnEl = document.getElementById('roll-total-num'), vsEl = document.getElementById('roll-vs');
+            if (r.dc) {
+                const pass = r.total >= r.dc;
+                if (tnEl) { tnEl.textContent = r.total; tnEl.className = 'roll-' + (pass ? 'pass' : 'fail'); }
+                if (vsEl) vsEl.textContent = `vs DC ${r.dc} — ${pass ? 'PASSOU' : 'FALHOU'}`;
+            } else {
+                if (tnEl) { tnEl.textContent = r.total || r.dado; tnEl.className = ''; }
+                if (vsEl) vsEl.textContent = '';
+            }
+
+            // ── Aba DADOS — exibe conteúdo ──
+            if (emptyEl) emptyEl.style.display = 'none';
+            if (contentEl) contentEl.style.display = 'block';
+
+            // Dado principal grande
+            const bigEl = document.getElementById('dados-d20-big');
+            if (bigEl) {
+                bigEl.textContent = r.dado;
+                bigEl.style.color = isCrit ? 'var(--green)' : isFail ? 'var(--red)' : '#fff';
+                bigEl.style.textShadow = isCrit ? '0 0 40px var(--green)' : isFail ? '0 0 40px var(--red)' : '0 0 12px rgba(255,255,255,.2)';
+                bigEl.style.borderColor = isCrit ? 'rgba(0,255,136,.35)' : isFail ? 'rgba(255,68,68,.35)' : 'var(--border)';
+            }
+
+            // Pool de dados (multi-roll)
+            const poolEl = document.getElementById('dados-pool');
+            const criterioEl = document.getElementById('dados-criterio');
+            if (poolEl) {
+                const rolls = r.all_rolls;
+                if (rolls && rolls.length > 1) {
+                    // Encontra o índice exato do dado usado (evita falso-positivo em caso de duplicata)
+                    // Marca apenas a PRIMEIRA ocorrência do valor usado como 'usado'
+                    let usadoMarcado = false;
+                    poolEl.style.display = 'flex';
+                    poolEl.innerHTML = rolls.map(d => {
+                        const isUsado = !usadoMarcado && d === r.dado;
+                        if (isUsado) usadoMarcado = true;
+                        const dCrit = d === 20, dFail = d === 1;
+                        let cls = 'dice-single';
+                        if (isUsado) cls += ' usado' + (dCrit ? ' crit' : dFail ? ' falha' : '');
+                        const tooltip = isUsado ? 'USADO' : String(d);
+                        return `<div class="${cls}" title="${tooltip}">${d}</div>`;
+                    }).join('');
+                    // Tag de critério abaixo dos cubinhos
+                    if (criterioEl && r.criterio) {
+                        criterioEl.style.display = 'block';
+                        const criterioMap = {
+                            'MELHOR': '▲ MELHOR DOS ' + rolls.length,
+                            'PIOR': '▼ PIOR DOS ' + rolls.length,
+                            'ÚNICO': 'ROLAGEM ÚNICA'
+                        };
+                        criterioEl.textContent = criterioMap[r.criterio] || r.criterio;
+                    }
+                } else {
+                    // Rolagem única — esconde pool e criterio
+                    poolEl.style.display = 'none';
+                    if (criterioEl) criterioEl.style.display = 'none';
+                }
+            }
+
+            // Expressão + resultado
+            const dadosExpr = document.getElementById('dados-expr');
+            if (dadosExpr) {
+                const attrLabel = r.attr_nome ? `  (${r.attr_nome})` : '';
+                dadosExpr.textContent = r.bonus != null
+                    ? `d20(${r.dado})  +  ${r.bonus}${attrLabel}  =  ${r.total}`
+                    : `d20  =  ${r.dado}`;
+            }
+            const dadosResult = document.getElementById('dados-result');
+            if (dadosResult) {
+                if (r.dc) {
+                    const pass = r.total >= r.dc;
+                    dadosResult.textContent = `vs DC ${r.dc}  —  ${pass ? 'PASSOU' : 'FALHOU'}`;
+                    dadosResult.style.color = pass ? 'var(--green)' : 'var(--red)';
+                } else {
+                    dadosResult.textContent = `Total: ${r.total || r.dado}`;
+                    dadosResult.style.color = '#fff';
+                }
+            }
+
+            // ── Destaca atributo usado no HUD ──
+            document.querySelectorAll('.attr-h.usado-teste').forEach(e => e.classList.remove('usado-teste'));
+            if (r.attr_nome) {
+                const attrKey = r.attr_nome.toLowerCase();
+                document.querySelectorAll('.attr-h').forEach(el => {
+                    const ab = el.querySelector('.ab');
+                    if (ab && ab.textContent.trim().toLowerCase() === attrKey) {
+                        el.classList.add('usado-teste');
+                    }
+                });
+            }
+        }
+
+        // ════════ MAP ════════
+        const STATUS_LABELS = {
+            'PARCIALMENTE_EXPLORADA': 'PARCIAL',
+            'EXPLORADA': 'EXPLORADA',
+            'DESCOBERTA': 'DESCOBERTA',
+            'BLOQUEADA': 'BLOQUEADA',
+        };
+        const POI_ICONS = { INIMIGO: '⚠', RECURSO: '◆', SAIDA: '→', NPC: '◉', OBJETO: '✦' };
+
+        function renderMap(areas) {
+            const el = document.getElementById('map-list');
+            if (!areas || !areas.length) {
+                el.innerHTML = '<div class="map-empty">Nenhuma área descoberta ainda.</div>';
+                return;
+            }
+            el.innerHTML = areas.map(a => {
+                const label = STATUS_LABELS[a.status] || a.status;
+                const poisHtml = (a.pois || []).map(p => {
+                    const icon = POI_ICONS[p.tipo] || '·';
+                    const cls = p.status === 'ATIVO' ? 'map-poi' : 'map-poi inativo';
+                    return `<div class="${cls}">${icon} ${p.nome} <span style="opacity:.5">[${p.status}]</span></div>`;
+                }).join('');
+                return `<div class="map-area">
+                <div class="map-area-nome">${a.nome}</div>
+                <div class="map-area-status">${label}${a.clima ? ' · ' + a.clima : ''}${a.periodo ? ' · ' + a.periodo : ''}</div>
+                ${a.notas ? `<div class="map-area-notas">${a.notas}</div>` : ''}
+                ${poisHtml}
+            </div>`;
+            }).join('');
+        }
+
+        // ════════ QUESTS ════════
+        function renderQuests(quests) {
+            const el = document.getElementById('quest-list');
+            if (!quests || !quests.length) {
+                el.innerHTML = '<div class="map-empty">Nenhuma missão ativa.</div>';
+                return;
+            }
+            el.innerHTML = quests.map(q => {
+                const objs = (q.objetivos || []).map(o =>
+                    `<div class="quest-obj${o.feito ? ' feito' : ''}">
+                    <span class="quest-check ${o.feito ? 'done' : 'todo'}">${o.feito ? '✓' : '○'}</span>
+                    <span>${o.texto}</span>
+                </div>`
+                ).join('');
+                return `<div class="quest-block">
+                <div class="quest-tipo">${q.tipo}</div>
+                <div class="quest-nome">${q.nome}</div>
+                ${objs}
+            </div>`;
+            }).join('');
+        }
+
+        // ════════ ATTR MODAL ════════
+        const ATTR_NAMES = {
+            forca: 'Força', destreza: 'Destreza', inteligencia: 'Inteligência',
+            sobrevivencia: 'Sobrevivência', percepcao: 'Percepção', carisma: 'Carisma',
+        };
+        let luState = { total: 0, spent: {}, attrs: {} };
+
+        function openAttrModal() {
+            const pts = window._luPts || 0, attrs = window._luAttrs || [];
+            luState = { total: pts, spent: {}, attrs: {} };
+            attrs.forEach(a => { luState.attrs[a.key || a.abbr.toLowerCase()] = a.value; });
+            document.getElementById('lu-pts-left').textContent = pts;
+            document.getElementById('lu-confirm').disabled = true;
+            document.getElementById('lu-attrs-list').innerHTML = Object.entries(ATTR_NAMES).map(([key, name]) => {
+                const cur = luState.attrs[key] ?? '?';
+                return `<div class="lu-attr-row">
+                <span class="lu-attr-name">${name}</span>
+                <span class="lu-attr-cur" id="lu-val-${key}">${cur}</span>
+                <button class="lu-pm" id="lu-minus-${key}" disabled onclick="luAdj('${key}',-1)">−</button>
+                <span class="lu-added" id="lu-add-${key}">+0</span>
+                <button class="lu-pm" id="lu-plus-${key}" onclick="luAdj('${key}',1)">+</button>
+            </div>`;
+            }).join('');
+            document.getElementById('attr-modal').classList.add('show');
+        }
+
+        function luAdj(key, delta) {
+            const cur = luState.spent[key] || 0, next = cur + delta;
+            const left = luState.total - Object.values(luState.spent).reduce((a, b) => a + b, 0);
+            if (next < 0 || (delta > 0 && left <= 0)) return;
+            luState.spent[key] = next;
+            document.getElementById(`lu-val-${key}`).textContent = (luState.attrs[key] ?? 0) + next;
+            document.getElementById(`lu-add-${key}`).textContent = next > 0 ? `+${next}` : '+0';
+            const newLeft = luState.total - Object.values(luState.spent).reduce((a, b) => a + b, 0);
+            document.getElementById('lu-pts-left').textContent = newLeft;
+            document.getElementById(`lu-minus-${key}`).disabled = (next <= 0);
+            document.querySelectorAll('[id^="lu-plus-"]').forEach(b => b.disabled = (newLeft <= 0));
+            document.getElementById('lu-confirm').disabled = (newLeft > 0);
+        }
+
+        async function confirmAttrs() {
+            const btn = document.getElementById('lu-confirm');
+            btn.disabled = true; btn.textContent = 'SALVANDO...';
+            try {
+                const res = await fetch('/api/levelup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ spent: luState.spent })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'Erro');
+                document.getElementById('attr-modal').classList.remove('show');
+                await refreshState();
+            } catch (e) {
+                btn.disabled = false; btn.textContent = '✗ ' + e.message;
+                setTimeout(() => { btn.textContent = 'CONFIRMAR'; btn.disabled = false; }, 2500);
+            }
+        }
+
+        // ════════ SKILL MODAL ════════
+        const CAT_COLORS = {
+            'Combate': 'var(--red)', 'Sobrevivência': 'var(--green)',
+            'Exploração': 'var(--holo)', 'Chip': '#9b7fe8',
+            'Técnica': '#9b7fe8', 'Furtividade': '#aaa', 'Físico': 'var(--amber)',
+        };
+        let skState = { selected: new Set(), max: 1, all: [], filter: 'Todas' };
+
+        function openSkillModal() {
+            const skills = window._availableSkills || [], max = window._skillChoicesCount || 1;
+            skState = { selected: new Set(), max, all: skills, filter: 'Todas' };
+            document.getElementById('sk-sub').textContent = `Escolha ${max} habilidade${max > 1 ? 's' : ''}`;
+            document.getElementById('sk-max-count').textContent = max;
+            document.getElementById('sk-sel-count').textContent = 0;
+            document.getElementById('sk-confirm').disabled = true;
+            const cats = ['Todas', ...[...new Set(skills.map(s => s.categoria))]];
+            document.getElementById('sk-filter-row').innerHTML = cats.map(c =>
+                `<button class="sk-filter-btn${c === 'Todas' ? ' active' : ''}" onclick="skSetFilter('${c}',this)">${c}</button>`
+            ).join('');
+            renderSkills();
+            document.getElementById('skill-modal').classList.add('show');
+        }
+
+        function skSetFilter(cat, btn) {
+            skState.filter = cat;
+            document.querySelectorAll('.sk-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderSkills();
+        }
+
+        function renderSkills() {
+            const list = document.getElementById('sk-list');
+            const filtered = skState.filter === 'Todas' ? skState.all
+                : skState.all.filter(s => s.categoria === skState.filter);
+            if (!filtered.length) {
+                list.innerHTML = `<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#555;padding:10px 0">Nenhuma habilidade disponível.</div>`;
+                return;
+            }
+            list.innerHTML = filtered.map(s => {
+                const sel = skState.selected.has(s.id);
+                const col = CAT_COLORS[s.categoria] || '#aaa';
+                const req = Object.entries(s.requisito || {}).map(([k, v]) => `${k}≥${v}`).join(', ');
+                return `<div class="sk-card${sel ? ' selected' : ''}" onclick="skToggle('${s.id}')">
+                <div class="sk-nome">${s.nome}</div>
+                <div class="sk-cat" style="color:${col}">${s.categoria.toUpperCase()}</div>
+                <div class="sk-efeito">${s.efeito}</div>
+                ${req ? `<div class="sk-req">Req: ${req}</div>` : ''}
+            </div>`;
+            }).join('');
+        }
+
+        function skToggle(id) {
+            if (skState.selected.has(id)) { skState.selected.delete(id); }
+            else { if (skState.selected.size >= skState.max) return; skState.selected.add(id); }
+            document.getElementById('sk-sel-count').textContent = skState.selected.size;
+            document.getElementById('sk-confirm').disabled = (skState.selected.size < skState.max);
+            renderSkills();
+        }
+
+        async function confirmSkills() {
+            const btn = document.getElementById('sk-confirm');
+            btn.disabled = true; btn.textContent = 'SALVANDO...';
+            try {
+                const res = await fetch('/api/skill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill_ids: [...skState.selected] })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.error || 'Erro');
+                document.getElementById('skill-modal').classList.remove('show');
+                await refreshState();
+            } catch (e) {
+                btn.disabled = false; btn.textContent = '✗ ' + e.message;
+                setTimeout(() => { btn.textContent = 'CONFIRMAR'; btn.disabled = false; }, 2500);
+            }
+        }
+    </script>
+</body>
+
+</html>
