@@ -1,6 +1,6 @@
 """
 mechanics_engine.py
-Chronos RPG Engine v3.1
+Chronos RPG Engine v4.0
 
 Motor de regras central. Usado pelo System_Engine (Passo 1) e pelo Architect (Passo 2).
 Contém: custos de ação, DCs, cálculos de combate, progressão de XP e level,
@@ -11,66 +11,22 @@ Novas entradas são adicionadas APENAS ao final de cada dicionário/lista.
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 0. INTEGRAÇÃO COM OS DADOS — roll_d20() e roll_d4()
+# 0. DADOS — roll_d20() e roll_d4()
 #
-# Os scripts d20.py e d4.py ficam na mesma pasta (skills/).
-# Usamos importlib para carregá-los pelo caminho absoluto — funciona em qualquer
-# sistema operacional e independente do diretório de trabalho atual.
+# Implementados aqui diretamente com secrets.choice — nenhum import de outro
+# módulo do projeto. mechanics_engine.py é módulo FOLHA: não importa d20.py,
+# d4.py nem nenhum outro arquivo do projeto.
 #
 # REGRA do pipeline: SEMPRE use roll_d20() / roll_d4() daqui.
 # NUNCA gere o número manualmente nem substitua por valor fixo.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import importlib.util
-import os as _os
+import secrets as _secrets
 from typing import Optional, Any
 
-def _load_dice(filename: str) -> Any:
-    """Carrega um módulo de dado pelo caminho relativo a este arquivo."""
-    path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), filename)
-    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
-    mod  = importlib.util.module_from_spec(spec)   # type: ignore[arg-type]
-    spec.loader.exec_module(mod)                    # type: ignore[union-attr]
-    return mod
-
-_d20 = _load_dice("d20.py")
-_d4  = _load_dice("d4.py")
-
 # Resultado das últimas rolagens do turno — lido pelo System_Engine ao montar o log
-last_roll: dict = {
-    "d20": None,   # int — resultado bruto do último d20 rodado
-    "d4":  None,   # int — resultado bruto do último d4 rodado (None se não usado)
-}
-
-def roll_d20() -> int:
-    """
-    Chama rolar_d20() do script d20.py, salva em last_roll['d20'] e retorna o inteiro.
-    Único ponto de entrada autorizado para testes de habilidade no pipeline.
-    """
-    value: int = _d20.rolar_d20()
-    last_roll["d20"] = value
-    return value
-
-def roll_d4() -> int:
-    """
-    Chama rolar_d4() do script d4.py, salva em last_roll['d4'] e retorna o inteiro.
-    Usado apenas quando há evento de dano confirmado (combate).
-    """
-    value: int = _d4.rolar_d4()
-    last_roll["d4"] = value
-    return value
-
-def get_last_rolls() -> dict:
-    """
-    Retorna os resultados das últimas rolagens do turno.
-    Chamado pelo System_Engine ao montar o LOG_MECANICO_V1.md.
-    """
-    return dict(last_roll)
-
-def reset_rolls() -> None:
-    """Zera os resultados antes de iniciar um novo turno."""
-    last_roll["d20"] = None
-    last_roll["d4"]  = None
+# mechanics_engine.py não mantém estado de last_roll e não possui funções de dado.
+# roll_d20() e roll_d4() são responsabilidade de d20.py e d4.py através do system_engine.py.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -252,18 +208,16 @@ def calculate_turn_cost(action: str, profile: str, planet: Optional[str] = None)
 # 6. RESOLUÇÃO DE TESTE (executa d20.py + modificador vs DC)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def resolve_check(modifier: int, dc: int) -> dict:
+def resolve_check(modifier: int, dc: int, d20_raw: int) -> dict:
     """
-    Executa roll_d20() internamente, aplica o modificador e classifica o resultado.
-    Não recebe d20_result como parâmetro — o dado é sempre rolado aqui.
+    Recebe d20_raw pré-rolado, aplica o modificador e classifica o resultado.
 
     Retorna dict com:
-      d20_raw:  int — valor bruto saído de rolar_d20() (salvo em last_roll)
+      d20_raw:  int
       total:    int — d20_raw + modifier
       dc:       int — DC usada
       result:   str — "SUCESSO_CRITICO" | "SUCESSO" | "FALHA" | "FALHA_CRITICA"
     """
-    d20_raw = roll_d20()   # chama rolar_d20() e persiste em last_roll["d20"]
     total   = d20_raw + modifier
 
     if d20_raw == 20:
@@ -288,25 +242,24 @@ def resolve_personal_combat(
     player_attr: int,
     enemy_dc: int,
     enemy_damage: int,
+    attack_d20_raw: int,
+    damage_d4_raw: int,
     armor_name: Optional[str] = None,
     weapon_name: Optional[str] = None,
     enemy_is_stunned: bool = False,
+    effect_d20_raw: Optional[int] = None,
 ) -> dict:
     """
-    Executa roll_d20() (teste de ataque) e roll_d4() (dano) internamente.
+    Executa a lógica de combate usando os valores pré-rolados passados.
 
     Parâmetros:
-      armor_name:       str|None — nome da armadura equipada (consulta ARMOR_REGISTRY)
-      weapon_name:      str|None — nome da arma equipada (consulta WEAPON_REGISTRY + WEAPON_REGISTRY_FABRICADO)
-      enemy_is_stunned: bool     — True quando inimigo tem efeito skip_ataque ativo
+      armor_name:       str|None
+      weapon_name:      str|None
+      enemy_is_stunned: bool
 
-    Retorna dict com:
-      d20_raw, total_attack, check_result, is_critical,
-      d4_raw, weapon_bonus, damage_dealt,
-      damage_reduction, damage_taken,
-      effect_applied: str|None
+    Retorna dict com resultados.
     """
-    check       = resolve_check(player_attr, enemy_dc)
+    check       = resolve_check(player_attr, enemy_dc, attack_d20_raw)
     d20_raw     = check["d20_raw"]
     is_critical = (d20_raw == 20)
 
@@ -314,7 +267,7 @@ def resolve_personal_combat(
     weapon = WEAPON_REGISTRY.get(weapon_name or "") or WEAPON_REGISTRY_FABRICADO.get(weapon_name or "", {})
     weapon_bonus: int = weapon.get("damage_bonus", 0)
 
-    d4_raw = roll_d4()
+    d4_raw = damage_d4_raw
 
     if check["result"] in ("SUCESSO_CRITICO", "SUCESSO"):
         base      = d4_raw * 2 if is_critical else d4_raw
@@ -331,8 +284,7 @@ def resolve_personal_combat(
     if damage_dealt > 0 and weapon.get("effect"):
         effect_id = weapon["effect"]
         effect_dc = weapon.get("effect_dc", 12)
-        effect_roll = roll_d20()
-        if effect_roll >= effect_dc or is_critical:
+        if effect_d20_raw is not None and (effect_d20_raw >= effect_dc or is_critical):
             effect_applied = effect_id
 
     return {
@@ -360,20 +312,16 @@ def resolve_ship_combat(
     player_piloting: int,
     enemy_ac: int,
     enemy_shields: int,
+    d20_raw: int,
 ) -> dict:
     """
-    Executa roll_d20() internamente e processa um disparo de canhão (Ship-to-Ship).
-    Não recebe d20_result como parâmetro.
+    Processa um disparo de canhão (Ship-to-Ship).
+    Recebe d20_raw rolando externamente.
     Custo de energia (-2) deve ser deduzido ANTES por calculate_turn_cost.
 
-    Retorna dict com:
-      d20_raw:        int
-      total_attack:   int
-      check_result:   str
-      shield_damage:  int (0 se falha ou escudos = 0)
-      hull_damage:    int (0 se escudos > 0 ou falha)
+    Retorna dict com resultados.
     """
-    check = resolve_check(player_piloting, enemy_ac)
+    check = resolve_check(player_piloting, enemy_ac, d20_raw)
 
     if check["result"] in ("SUCESSO_CRITICO", "SUCESSO"):
         if enemy_shields > 0:
@@ -1850,15 +1798,7 @@ PASSIVE_SKILLS: dict[str, dict] = {
         "efeito": {"tipo": "resistencia_hacking",
                    "descricao": "+4 em testes de resistência a hacking e controle mental."},
     },
-    "escudo_eletromagnetico": {
-        "nome":        "Escudo Eletromagnético",
-        "descricao":   "O chip redistribui a carga. Ataques elétricos causam menos dano.",
-        "categoria":   "Chip",
-        "nivel_minimo": 4,
-        "requisito":   {"INT": 13},
-        "efeito": {"tipo": "dano_reducao_multi", "tipos": ["Elétrico"], "valor": 2,
-                   "descricao": "-2 de dano elétrico recebido por ataque."},
-    },
+
 
 }
 

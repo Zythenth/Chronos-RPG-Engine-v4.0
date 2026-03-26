@@ -700,51 +700,36 @@ def api_action():
             pass
 
         # ── SNAPSHOT PRÉ-TURNO (para rollback em caso de 503) ────────────────
-        # Captura TODOS os arquivos que podem ser modificados no pipeline,
-        # incluindo state e context (seção 18 — 10 arquivos de snapshot).
-        _snapshot: dict = {}
-        _snapshot_state_files = [
-            "character_sheet.json", "active_combat.json",
-            "chapter_tracker.json", "inventory.csv",
-            "world_map.json", "active_quests.md",
-        ]
-        _snapshot_ctx_files = [
-            "campaign_log.md", "story_bible.md",
-            "npc_dossier.md", "bestiary.md",
-        ]
-        for _fname in _snapshot_state_files:
-            _fpath = os.path.join(_STATE_DIR, _fname)
-            if os.path.exists(_fpath):
-                try:
-                    _snapshot[_fpath] = open(_fpath, encoding="utf-8").read()
-                except Exception:
-                    pass
-        for _fname in _snapshot_ctx_files:
-            _fpath = os.path.join(_CTX_DIR, _fname)
-            if os.path.exists(_fpath):
-                try:
-                    _snapshot[_fpath] = open(_fpath, encoding="utf-8").read()
-                except Exception:
-                    pass
-        # Also snapshot drafts that get overwritten
-        for _dname in ["current_scene.md", "narrative_options.json"]:
-            _dpath = os.path.join(_DRAFT_DIR, _dname)
-            if os.path.exists(_dpath):
-                try:
-                    _snapshot[_dpath] = open(_dpath, encoding="utf-8").read()
-                except Exception:
-                    pass
+        _ckpt_id = None
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "checkpoint_manager",
+                os.path.join(_HERE, "checkpoint_manager.py")
+            )
+            if spec and spec.loader:
+                cm = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(cm)
+                _ckpt_id = cm.CheckpointManager().save_now("pre_turn")
+        except Exception as e:
+            pipeline_log.append(f"⚠ Erro no snapshot pré-turno: {e}")
 
         def _rollback_turn():
             """Restaura o estado pré-turno a partir do snapshot."""
-            for _fpath, _content in _snapshot.items():
+            if _ckpt_id:
                 try:
-                    os.makedirs(os.path.dirname(_fpath), exist_ok=True)
-                    with open(_fpath, "w", encoding="utf-8") as _rf:
-                        _rf.write(_content)
-                except Exception:
-                    pass
-            pipeline_log.append("↩ Estado pré-turno restaurado (rollback — todos os arquivos).")
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(
+                        "checkpoint_manager",
+                        os.path.join(_HERE, "checkpoint_manager.py")
+                    )
+                    if spec and spec.loader:
+                        cm = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(cm)
+                        cm.CheckpointManager().restore(_ckpt_id)
+                        pipeline_log.append("↩ Estado pré-turno restaurado (rollback).")
+                except Exception as e:
+                    pipeline_log.append(f"⚠ Erro no rollback: {e}")
 
         # Passo 1 — system_engine
         se_out = run_script(cmd, "Passo 1 — System Engine")

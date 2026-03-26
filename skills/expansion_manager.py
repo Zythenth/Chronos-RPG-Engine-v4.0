@@ -60,13 +60,19 @@ except ImportError:
 # TABELAS DE TIERS NUMÉRICOS (GUARDRAILS) - Carregados de mechanics_engine.py (I-12)
 # ─────────────────────────────────────────────────────────────────────────────
 
-import importlib.util as _ilu
-_spec = _ilu.spec_from_file_location("mechanics_engine", os.path.join(_HERE, "mechanics_engine.py"))
-_me   = _ilu.module_from_spec(_spec)  # type: ignore
-_spec.loader.exec_module(_me)          # type: ignore
-
-CREATURE_TIERS = _me.CREATURE_TIERS
-ITEM_TIERS = _me.ITEM_TIERS
+def _load_tiers() -> tuple[dict, dict]:
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("mechanics_engine", os.path.join(_HERE, "mechanics_engine.py"))
+    if not _spec or not _spec.loader:
+        return {}, {}
+    _me = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_me)
+    ct = getattr(_me, "CREATURE_TIERS", {})
+    it = getattr(_me, "ITEM_TIERS", {})
+    if not ct or not it:
+        ct = ct or {"fraco": {"hp": 8, "dano": 2, "dc": 10, "bonus_racial": 0, "moral": "40%"}, "medio": {"hp": 15, "dano": 4, "dc": 12, "bonus_racial": 2, "moral": "30%"}, "forte": {"hp": 35, "dano": 8, "dc": 15, "bonus_racial": 4, "moral": "20%"}, "lendario": {"hp": 80, "dano": 15, "dc": 18, "bonus_racial": 6, "moral": "Nunca"}}
+        it = it or {"fraco": {"durabilidade": 10, "quantidade_drop": 1, "peso_kg": 0.1}, "medio": {"durabilidade": 25, "quantidade_drop": 2, "peso_kg": 0.5}, "forte": {"durabilidade": 50, "quantidade_drop": 3, "peso_kg": 1.0}, "lendario": {"durabilidade": 100, "quantidade_drop": 1, "peso_kg": 2.0}}
+    return ct, it
 
 class ItemExpansion(BaseModel):
     nome: str
@@ -322,10 +328,11 @@ def save_new_item(data: dict) -> bool:
         print(f"  ⚠ Item '{nome}' já existe — expansão cancelada.")
         return False
 
+    _, ITEM_TIERS = _load_tiers()
     tier_name = data.get("tier", "medio").lower()
     if tier_name not in ITEM_TIERS:
         tier_name = "medio"
-    item_tier = ITEM_TIERS[tier_name]
+    item_tier = ITEM_TIERS.get(tier_name, {})
 
     entry = f"""    '{nome}': {{
         'type': '{data.get("tipo", "Material")}',
@@ -379,10 +386,11 @@ def save_new_creature(data: dict) -> bool:
         print(f"  ⚠ Criatura '{nome}' já existe no bestiário — expansão cancelada.")
         return False
 
+    CREATURE_TIERS, _ = _load_tiers()
     tier_name = data.get("tier", "medio").lower()
     if tier_name not in CREATURE_TIERS:
         tier_name = "medio"
-    ct = CREATURE_TIERS[tier_name]
+    ct = CREATURE_TIERS.get(tier_name, {})
 
     bestiary_block = f"""---
 ## Nome: {nome}
@@ -430,8 +438,9 @@ def save_new_creature(data: dict) -> bool:
     tier_name_print = data.get("tier", "medio").lower()
     if tier_name_print not in CREATURE_TIERS:
         tier_name_print = "medio"
-    ct_print = CREATURE_TIERS[tier_name_print]
-    print(f"  → HP: {ct_print['hp']} | DC: {ct_print['dc']} | Dano: {ct_print['dano']} | Tier: {tier_name_print}")
+    ct_print = CREATURE_TIERS.get(tier_name_print, {})
+    if ct_print:
+        print(f"  → HP: {ct_print.get('hp')} | DC: {ct_print.get('dc')} | Dano: {ct_print.get('dano')} | Tier: {tier_name_print}")
     return True
 
 

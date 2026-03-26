@@ -46,6 +46,20 @@ _spec = _ilu.spec_from_file_location("mechanics_engine", os.path.join(_HERE, "me
 _me   = _ilu.module_from_spec(_spec)  # type: ignore
 _spec.loader.exec_module(_me)          # type: ignore
 
+# ── Importa multi_roll para delegar multi-roll (U-41) ─────────────────────────
+_mr_spec = _ilu.spec_from_file_location("multi_roll", os.path.join(_HERE, "multi_roll.py"))
+_mr      = _ilu.module_from_spec(_mr_spec)  # type: ignore
+_mr_spec.loader.exec_module(_mr)             # type: ignore
+
+# ── Importa d20 e d4 para rolagens oficiais ───────────────────────────────────
+_d20_spec = _ilu.spec_from_file_location("d20", os.path.join(_HERE, "d20.py"))
+_d20      = _ilu.module_from_spec(_d20_spec)  # type: ignore
+_d20_spec.loader.exec_module(_d20)             # type: ignore
+
+_d4_spec = _ilu.spec_from_file_location("d4", os.path.join(_HERE, "d4.py"))
+_d4      = _ilu.module_from_spec(_d4_spec)    # type: ignore
+_d4_spec.loader.exec_module(_d4)               # type: ignore
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. SISTEMA MULTI-DADOS — delega a mechanics_engine.ROLL_TABLE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -163,24 +177,13 @@ def _tick_survival(cs: dict, report: list, action: str = "") -> None:
 
 
 def _roll(faces: int, attr_val: int) -> tuple:
-    """Executa multi-rolagem via ROLL_TABLE de mechanics_engine.
+    """Delega multi-rolagem a multi_roll.do_multi_roll (U-41).
     Retorna (lista_brutos, usado, criterio, sufixo_mod)."""
-    clamped = max(1, min(20, attr_val))
-    n, criterio = _me.ROLL_TABLE.get(clamped, (1, "ÚNICO"))
-    modificador = _me.calc_modifier(clamped)
-    sufixo = f"({modificador:+})" if modificador != 0 else ""
-    resultados = [secrets.randbelow(faces) + 1 for _ in range(n)]
-    if criterio == "MELHOR":
-        usado = max(resultados)
-    elif criterio == "PIOR":
-        usado = min(resultados)
-    else:
-        usado = resultados[0]
-    return resultados, usado, criterio, sufixo
+    return _mr.do_multi_roll(faces, attr_val)
 
 def _roll_enemy_d4() -> int:
-    """Inimigo sempre 1× d4."""
-    return secrets.randbelow(4) + 1
+    """Inimigo sempre 1× d4 — usa _d4.rolar_d4() para rastreamento oficial."""
+    return _d4.rolar_d4()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. I/O DE ESTADO
@@ -326,7 +329,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
     # ── 1. INICIATIVA (multi-roll para jogador, velocidade fixa para inimigo) ──
     ini_rolls, ini_used, ini_crit, _ = _roll(20, des_val)
     ini_player  = ini_used + _mod(des_val)
-    ini_enemy   = secrets.randbelow(20) + 1 + inimigo.get("velocidade", 0)
+    ini_enemy   = _d20.rolar_d20() + inimigo.get("velocidade", 0)
     player_first = ini_player >= ini_enemy
     report.append(f"\n2. SCRIPTS")
     report.append(f"   INICIATIVA: Ferro [{ini_player}] vs {inimigo.get('nome','?')} [{ini_enemy}] → {'FERRO ataca PRIMEIRO' if player_first else 'INIMIGO ataca PRIMEIRO'}")
@@ -367,7 +370,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
         dmg = 0
         if out in ("SUCESSO CRÍTICO", "SUCESSO"):
             # d4 de dano: rolagem simples (multi-roll é apenas para d20)
-            d4p_used = secrets.randbelow(4) + 1
+            d4p_used = _d4.rolar_d4()
             base_dmg   = d4p_used * 2 if is_crit else d4p_used
             dano_fixo  = passive_fx.get("dano_bonus_fixo", 0)
             dano_melee = passive_fx.get("dano_bonus_melee", 0) if posicao in ("MELEE","FLANQUEANDO") else 0
@@ -381,7 +384,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
             # Efeito de arma
             if weapon.get("effect"):
                 ef_dc   = weapon.get("effect_dc", 12)
-                ef_roll = secrets.randbelow(20) + 1
+                ef_roll = _d20.rolar_d20()
                 if ef_roll >= ef_dc or is_crit:
                     _me.apply_new_effect(inimigo["status_effects"], weapon["effect"])
                     report.append(f"   Efeito aplicado: {weapon['effect']} (roll={ef_roll} vs DC{ef_dc})")
@@ -430,7 +433,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
         hp_pct = hp_inimigo_depois / max(1, inimigo["hp_maximo"])
         tem_moral = inimigo.get("ficha_racial", {}).get("pode_fugir", True)
         if hp_pct <= MORAL_FLEE_THRESHOLD and tem_moral:
-            roll_moral = secrets.randbelow(20) + 1
+            roll_moral = _d20.rolar_d20()
             dc_moral   = inimigo.get("ficha_racial", {}).get("dc_moral", 10)
             if roll_moral < dc_moral:
                 inimigo_fugiu = True
@@ -647,7 +650,7 @@ def action_craft(cs: dict, ac: dict, args, passive_fx: dict,
         suf_lbl = f"({d20_suf})" if d20_suf else ""
         int_val = get_attr(cs, "INT")
         report.append(f"   D20 {int_val}{suf_lbl}: {d20_rolls} → USADO: {d20_used} ({d20_crit})")
-        report.append(f"   Total: {d20_used} + {int_val}(INT) = {total} vs DC {dc} → {outcome}")
+        report.append(f"   Total: {d20_used} + {_mod(int_val)}(INT mod) = {total} vs DC {dc} → {outcome}")
     else:
         report.append(f"   Sem teste (receita automática)")
     report.append(f"\n3. RESULTADO: {outcome}")
@@ -905,7 +908,7 @@ def _print_hud(cs, ac, d20_rolls, d20_used, d20_crit, d20_suf, attr_val, attr_nm
     d20_str = f"{d20_rolls} → USADO: {d20_used} ({d20_crit})" if d20_rolls else "—"
     d4p_str = f"{d4p_rolls} → USADO: {d4p_used} ({d4p_crit})" if d4p_rolls else "N/A"
     d4e_str = f"[{d4e_raw}] + RACIAL[{racial}] → -{enemy_dmg} HP" if d4e_raw else "N/A"
-    dado_d20_str = (f"{d20_used} + {attr_val}({attr_nm}{suf_lbl}) = {total_attack} vs DC {dc} → {outcome}"
+    dado_d20_str = (f"{d20_used} + {_mod(attr_val)}({attr_nm} mod{suf_lbl}) = {total_attack} vs DC {dc} → {outcome}"
                     if d20_used and attr_val is not None else "—")
 
     cs["identity"]["status"] = status
@@ -927,6 +930,65 @@ def _print_hud(cs, ac, d20_rolls, d20_used, d20_crit, d20_suf, attr_val, attr_nm
 7. STATUS FINAL: {status}""")
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 13B. AÇÃO: NAVAL
+# ─────────────────────────────────────────────────────────────────────────────
+
+def action_naval_fire(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> None:
+    if not ac.get("combate_ativo"):
+        report.append("ERRO: Nenhum combate ativo (active_combat.json → combate_ativo: false).")
+        return
+
+    inimigo = ac["inimigo"]
+
+    # 1. Custo de Energy: -2%
+    en_before = get_vital(cs, "energy_reserves")
+    if en_before < 2:
+        report.append("ERRO: Sem energia suficiente para disparo naval (Energy < 2%).")
+        return
+    set_vital(cs, "energy_reserves", en_before - 2)
+    report.append(f"\n1. NAVAL FIRE: Energy -2% (Atual: {en_before-2}%)")
+
+    # 2. Rolar DES contra AC
+    des_val = get_attr(cs, "DES")
+    dc = inimigo.get("ac", 15)  # AC da nave inimiga
+
+    d20_rolls, d20_used, d20_crit, d20_suf = _roll(20, des_val)
+    total = d20_used + _mod(des_val) + passive_fx.get("ataque_naval_bonus", 0)
+
+    sucesso = (total >= dc) or (d20_used == 20)
+    falha_critica = (d20_used == 1)
+
+    suf_lbl = f"({d20_suf})" if d20_suf else ""
+    report.append(f"   D20 DES{suf_lbl}: {d20_rolls} → USADO: {d20_used}")
+    report.append(f"   Ataque: {d20_used} + {_mod(des_val)}(DES mod) = {total} vs AC {dc}")
+
+    if falha_critica or not sucesso:
+        outcome = "FALHA"
+        report.append("   Resultado: FALHA (sem dano)")
+    else:
+        outcome = "SUCESSO"
+        escudos = inimigo.get("escudos_atuais", 0)
+        hp = inimigo.get("hp_atual", 10)
+        if escudos > 0:
+            dano = 15
+            novo_escudo = max(0, escudos - dano)
+            inimigo["escudos_atuais"] = novo_escudo
+            report.append(f"   Resultado: SUCESSO (15 dano nos escudos → {escudos} para {novo_escudo})")
+        else:
+            dano = 10
+            novo_hp = max(0, hp - dano)
+            inimigo["hp_atual"] = novo_hp
+            report.append(f"   Resultado: SUCESSO (10 dano no casco → {hp} para {novo_hp})")
+
+            if novo_hp <= 0:
+                report.append("   Inimigo DESTRUÍDO!")
+                ac["combate_ativo"] = False
+
+    ac["turno_combate"] = ac.get("turno_combate", 0) + 1
+
+    _print_hud(cs, ac, d20_rolls, d20_used, d20_crit, d20_suf, des_val, "DES", [], None, None, 0, 0, 0, total, dc, outcome, report)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 14. MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -942,6 +1004,9 @@ def main():
     p_c.add_argument("--weapon",   help="Nome exato da arma (ex: 'Faca Improvisada')")
     p_c.add_argument("--position", choices=["MELEE","DISTANCIA","COBERTO","FLANQUEANDO"],
                      help="Sobrescreve posicionamento atual")
+
+    # naval
+    sub.add_parser("naval", help="Combate ship-to-ship (disparo naval)")
 
     # explore
     p_e = sub.add_parser("explore", help="Explorar área")
@@ -1008,6 +1073,7 @@ def main():
     # ── Parsing ───────────────────────────────────────────────────────────────
     action_map = {
         "combat":  "Combate",
+        "naval":   "Combate Naval",
         "explore": "Exploração",
         "scan":    "Scan/Análise",
         "craft":   "Crafting",
@@ -1022,6 +1088,7 @@ def main():
 
     # ── Despacha ação ─────────────────────────────────────────────────────────
     if   args.action == "combat":  action_combat(cs, ac, args, passive_fx, report)
+    elif args.action == "naval":   action_naval_fire(cs, ac, args, passive_fx, report)
     elif args.action == "explore": action_explore(cs, ac, args, passive_fx, report)
     elif args.action == "scan":    action_scan(cs, ac, args, passive_fx, report)
     elif args.action == "craft":   inv = action_craft(cs, ac, args, passive_fx, report, inv)
