@@ -5,7 +5,11 @@ checkpoint_manager.py — Sistema de Checkpoints e Backups
 Chronos RPG Engine v4.0
 
 Salva snapshots completos do estado do jogo a cada 5 turnos.
-Mantém os últimos 10 checkpoints (rota compacta com shutil.copy).
+Mantém os últimos 10 checkpoints.
+
+O snapshot é montado em diretório temporário, recebe manifest com checksums
+SHA-256 e só então é promovido para o ID final. Isso evita checkpoints
+parcialmente gravados quando um turno falha no meio do caminho.
 
 USO:
   from checkpoint_manager import CheckpointManager
@@ -22,7 +26,7 @@ CLI:
   python checkpoint_manager.py diff --id 3
 """
 
-import os, sys, json, csv, shutil, datetime, argparse
+import os, sys, json, csv, shutil, datetime, argparse, hashlib
 from typing import Optional
 
 _HERE      = os.path.dirname(os.path.abspath(__file__))
@@ -48,6 +52,7 @@ _CTX_FILES = [
     "story_bible.md",
     "npc_dossier.md",
     "bestiary.md",
+    "dynamic_items.json",
 ]
 
 MAX_CHECKPOINTS = 10
@@ -62,15 +67,100 @@ def _load_log() -> list:
     if not os.path.exists(_LOG_PATH):
         return []
     try:
-        return json.load(open(_LOG_PATH, encoding="utf-8"))
+        with open(_LOG_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
     except Exception:
         return []
 
 
 def _save_log(log: list) -> None:
-    os.makedirs(_CKPT_DIR, exist_ok=True)
-    with open(_LOG_PATH, "w", encoding="utf-8") as f:
-        json.dump(log, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(_LOG_PATH, log, indent=2)
+
+
+def _atomic_json_write(path: str, data, indent: int = 2) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=indent)
+    os.replace(tmp, path)
+
+
+def _sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _copy_file_with_manifest(src: str, dst: str, rel_path: str) -> dict:
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = f"{dst}.tmp"
+    shutil.copy2(src, tmp)
+    checksum = _sha256_file(tmp)
+    os.replace(tmp, dst)
+    return {
+        "path": rel_path.replace("\\", "/"),
+        "bytes": os.path.getsize(dst),
+        "sha256": checksum,
+    }
+
+
+def _manifest_errors(ckpt_dir: str, meta: dict) -> list[str]:
+    """Valida checksums de checkpoints novos. Checkpoints antigos sem manifest passam."""
+    manifest = meta.get("manifest", [])
+    if not manifest:
+        return []
+
+    errors: list[str] = []
+    for entry in manifest:
+        rel = str(entry.get("path", ""))
+        expected_hash = str(entry.get("sha256", ""))
+        expected_size = entry.get("bytes")
+        path = os.path.join(ckpt_dir, *rel.split("/"))
+
+        if not os.path.exists(path):
+            errors.append(f"AUSENTE_NO_CHECKPOINT: {rel}")
+            continue
+
+        try:
+            actual_size = os.path.getsize(path)
+            if expected_size is not None and int(expected_size) != actual_size:
+                errors.append(f"TAMANHO_DIVERGENTE: {rel}")
+            actual_hash = _sha256_file(path)
+            if expected_hash and actual_hash != expected_hash:
+                errors.append(f"SHA256_DIVERGENTE: {rel}")
+        except Exception as e:
+            errors.append(f"ERRO_VALIDANDO: {rel}: {e}")
+
+    return errors
+
+
+def _trim_log(log: list, protect_ids: Optional[set[str]] = None) -> list:
+    """Mantém o limite de checkpoints sem apagar um alvo protegido por restore."""
+    protected = protect_ids or set()
+    while len(log) > MAX_CHECKPOINTS:
+        remove_idx: Optional[int] = None
+        for idx, entry in enumerate(log):
+            if str(entry.get("id", "")) not in protected:
+                remove_idx = idx
+                break
+        if remove_idx is None:
+            break
+
+        old = log.pop(remove_idx)
+        old_dir = os.path.join(_CKPT_DIR, old["id"])
+        if os.path.exists(old_dir):
+            shutil.rmtree(old_dir)
+    return log
+
+
+def _atomic_restore_file(src: str, dst: str) -> None:
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = f"{dst}.restore_tmp"
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dst)
 
 
 def _get_turno() -> int:
