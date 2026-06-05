@@ -259,6 +259,44 @@ class ChronosContractTests(unittest.TestCase):
         self.assertTrue(web_server.pipeline_lock.acquire(blocking=False))
         web_server.pipeline_lock.release()
 
+    def test_checkpoint_manifest_detects_hash_mismatch(self):
+        import checkpoint_manager
+
+        meta = {
+            "manifest": [
+                {
+                    "path": "current_state/character_sheet.json",
+                    "bytes": 10,
+                    "sha256": "expected",
+                }
+            ]
+        }
+
+        with (
+            mock.patch.object(checkpoint_manager.os.path, "exists", return_value=True),
+            mock.patch.object(checkpoint_manager.os.path, "getsize", return_value=10),
+            mock.patch.object(checkpoint_manager, "_sha256_file", return_value="actual"),
+        ):
+            errors = checkpoint_manager._manifest_errors("checkpoint", meta)
+
+        self.assertIn("SHA256_DIVERGENTE: current_state/character_sheet.json", errors)
+
+    def test_checkpoint_trim_preserves_restore_target(self):
+        import checkpoint_manager
+
+        log = [{"id": "keep"}, {"id": "old"}, {"id": "new"}]
+
+        with (
+            mock.patch.object(checkpoint_manager, "MAX_CHECKPOINTS", 2),
+            mock.patch.object(checkpoint_manager.os.path, "exists", return_value=True),
+            mock.patch.object(checkpoint_manager.shutil, "rmtree") as rmtree,
+        ):
+            trimmed = checkpoint_manager._trim_log(log, protect_ids={"keep"})
+
+        self.assertEqual([entry["id"] for entry in trimmed], ["keep", "new"])
+        rmtree.assert_called_once()
+        self.assertIn("old", rmtree.call_args.args[0])
+
 
 if __name__ == "__main__":
     unittest.main()
