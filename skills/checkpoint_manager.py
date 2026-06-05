@@ -167,7 +167,8 @@ def _get_turno() -> int:
     """Lê o número do turno atual do chapter_tracker.json."""
     path = os.path.join(_STATE_DIR, "chapter_tracker.json")
     try:
-        ct = json.load(open(path, encoding="utf-8"))
+        with open(path, encoding="utf-8") as f:
+            ct = json.load(f)
         return ct.get("contagem", {}).get("interacoes_no_capitulo", 0)
     except Exception:
         return 0
@@ -177,7 +178,8 @@ def _get_chapter() -> str:
     """Lê o capítulo atual."""
     path = os.path.join(_STATE_DIR, "chapter_tracker.json")
     try:
-        ct = json.load(open(path, encoding="utf-8"))
+        with open(path, encoding="utf-8") as f:
+            ct = json.load(f)
         cap = ct.get("capitulo_atual", {})
         return f"Cap{cap.get('numero','?')}"
     except Exception:
@@ -188,7 +190,8 @@ def _get_hp() -> str:
     """Lê HP atual/max para o label do checkpoint."""
     path = os.path.join(_STATE_DIR, "character_sheet.json")
     try:
-        cs = json.load(open(path, encoding="utf-8"))
+        with open(path, encoding="utf-8") as f:
+            cs = json.load(f)
         hp = cs.get("vitals", {}).get("hp", {})
         return f"HP{hp.get('current','?')}/{hp.get('max','?')}"
     except Exception:
@@ -211,67 +214,84 @@ class CheckpointManager:
             return self.save_now(f"auto_turno{turno}")
         return None
 
-    def save_now(self, label: str = "") -> str:
+    def save_now(self, label: str = "", protect_ids: Optional[set[str]] = None) -> str:
         """
         Cria um snapshot completo agora.
         Retorna o ID do checkpoint (string).
         """
         log  = _load_log()
-        ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        now = datetime.datetime.now()
+        ts   = now.strftime("%Y%m%d_%H%M%S_%f")
         turno = _get_turno()
-        ckpt_id = f"{ts}_{_get_chapter()}_T{turno}"
+        chapter = _get_chapter()
+        hp = _get_hp()
+        base_id = f"{ts}_{chapter}_T{turno}"
         if label:
-            ckpt_id = f"{ts}_{label}"
+            base_id = f"{ts}_{label}"
+
+        ckpt_id = base_id
+        suffix = 1
+        while os.path.exists(os.path.join(_CKPT_DIR, ckpt_id)):
+            ckpt_id = f"{base_id}_{suffix}"
+            suffix += 1
 
         ckpt_dir = os.path.join(_CKPT_DIR, ckpt_id)
-        os.makedirs(ckpt_dir, exist_ok=True)
-        os.makedirs(os.path.join(ckpt_dir, "current_state"), exist_ok=True)
-        os.makedirs(os.path.join(ckpt_dir, "world_context"), exist_ok=True)
+        tmp_dir = os.path.join(_CKPT_DIR, f".{ckpt_id}.tmp")
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        os.makedirs(os.path.join(tmp_dir, "current_state"), exist_ok=True)
+        os.makedirs(os.path.join(tmp_dir, "world_context"), exist_ok=True)
 
         saved = []
         errors = []
+        manifest = []
 
-        # Copia arquivos de estado
-        for fname in _STATE_FILES:
-            src = os.path.join(_STATE_DIR, fname)
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(ckpt_dir, "current_state", fname))
-                saved.append(f"current_state/{fname}")
-            else:
-                errors.append(f"AUSENTE: {fname}")
+        try:
+            # Copia arquivos de estado
+            for fname in _STATE_FILES:
+                src = os.path.join(_STATE_DIR, fname)
+                rel = f"current_state/{fname}"
+                if os.path.exists(src):
+                    manifest.append(_copy_file_with_manifest(src, os.path.join(tmp_dir, "current_state", fname), rel))
+                    saved.append(rel)
+                else:
+                    errors.append(f"AUSENTE: {rel}")
 
-        # Copia arquivos de contexto
-        for fname in _CTX_FILES:
-            src = os.path.join(_CTX_DIR, fname)
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(ckpt_dir, "world_context", fname))
-                saved.append(f"world_context/{fname}")
+            # Copia arquivos de contexto
+            for fname in _CTX_FILES:
+                src = os.path.join(_CTX_DIR, fname)
+                rel = f"world_context/{fname}"
+                if os.path.exists(src):
+                    manifest.append(_copy_file_with_manifest(src, os.path.join(tmp_dir, "world_context", fname), rel))
+                    saved.append(rel)
 
-        # Metadados do checkpoint
-        meta = {
-            "id":      ckpt_id,
-            "ts":      ts,
-            "turno":   turno,
-            "chapter": _get_chapter(),
-            "hp":      _get_hp(),
-            "label":   label,
-            "files":   saved,
-            "errors":  errors,
-        }
-        with open(os.path.join(ckpt_dir, "meta.json"), "w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
+            # Metadados do checkpoint
+            meta = {
+                "id":       ckpt_id,
+                "ts":       ts,
+                "created_at": now.isoformat(timespec="seconds"),
+                "turno":    turno,
+                "chapter":  chapter,
+                "hp":       hp,
+                "label":    label,
+                "files":    saved,
+                "manifest": manifest,
+                "errors":   errors,
+                "snapshot_version": 2,
+            }
+            _atomic_json_write(os.path.join(tmp_dir, "meta.json"), meta, indent=2)
 
-        # Adiciona ao log
-        log.append(meta)
+            # Promove o snapshot apenas depois de todos os arquivos e meta existirem.
+            os.replace(tmp_dir, ckpt_dir)
 
-        # Mantém apenas os últimos MAX_CHECKPOINTS
-        if len(log) > MAX_CHECKPOINTS:
-            old = log.pop(0)
-            old_dir = os.path.join(_CKPT_DIR, old["id"])
-            if os.path.exists(old_dir):
-                shutil.rmtree(old_dir)
-
-        _save_log(log)
+            # Adiciona ao log somente depois que o diretório final existe.
+            log.append(meta)
+            log = _trim_log(log, protect_ids=protect_ids)
+            _save_log(log)
+        except Exception:
+            if os.path.exists(tmp_dir):
+                shutil.rmtree(tmp_dir)
+            raise
 
         print(f"✓ Checkpoint salvo: {ckpt_id}")
         print(f"  Arquivos: {len(saved)} | Erros: {len(errors)}")
@@ -316,9 +336,16 @@ class CheckpointManager:
             print(f"ERRO: Diretório do checkpoint não encontrado: {ckpt_dir}")
             return False
 
+        integrity_errors = _manifest_errors(ckpt_dir, meta)
+        if integrity_errors:
+            print("ERRO: checkpoint falhou na verificação de integridade.")
+            for e in integrity_errors[:10]:
+                print(f"  ⚠ {e}")
+            return False
+
         # Backup do estado atual antes de restaurar
         print("  Criando backup do estado atual antes de restaurar...")
-        self.save_now("pre_restore")
+        self.save_now("pre_restore", protect_ids={str(meta["id"])})
 
         # Restaura arquivos de estado
         restored: int = 0
@@ -326,7 +353,7 @@ class CheckpointManager:
             src = os.path.join(ckpt_dir, "current_state", fname)
             dst = os.path.join(_STATE_DIR, fname)
             if os.path.exists(src):
-                shutil.copy2(src, dst)
+                _atomic_restore_file(src, dst)
                 restored += 1  # type: ignore
 
         # Restaura arquivos de contexto
@@ -334,7 +361,7 @@ class CheckpointManager:
             src = os.path.join(ckpt_dir, "world_context", fname)
             dst = os.path.join(_CTX_DIR, fname)
             if os.path.exists(src):
-                shutil.copy2(src, dst)
+                _atomic_restore_file(src, dst)
                 restored += 1  # type: ignore
 
         print(f"✓ Checkpoint restaurado: {meta['id']}")
