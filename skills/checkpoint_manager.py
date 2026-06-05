@@ -406,8 +406,10 @@ class CheckpointManager:
 
         # Compara character_sheet
         try:
-            cs_old = json.load(open(os.path.join(ckpt_dir, "current_state", "character_sheet.json"), encoding="utf-8"))
-            cs_now = json.load(open(os.path.join(_STATE_DIR, "character_sheet.json"), encoding="utf-8"))
+            with open(os.path.join(ckpt_dir, "current_state", "character_sheet.json"), encoding="utf-8") as f:
+                cs_old = json.load(f)
+            with open(os.path.join(_STATE_DIR, "character_sheet.json"), encoding="utf-8") as f:
+                cs_now = json.load(f)
 
             v_old = cs_old.get("vitals", {})
             v_now = cs_now.get("vitals", {})
@@ -435,8 +437,10 @@ class CheckpointManager:
 
         # Compara inventário (contagem de linhas)
         try:
-            inv_old = list(csv.DictReader(open(os.path.join(ckpt_dir, "current_state", "inventory.csv"), encoding="utf-8")))
-            inv_now = list(csv.DictReader(open(os.path.join(_STATE_DIR, "inventory.csv"), encoding="utf-8")))
+            with open(os.path.join(ckpt_dir, "current_state", "inventory.csv"), encoding="utf-8", newline="") as f:
+                inv_old = list(csv.DictReader(f))
+            with open(os.path.join(_STATE_DIR, "inventory.csv"), encoding="utf-8", newline="") as f:
+                inv_now = list(csv.DictReader(f))
             print(f"  {'Inventário (linhas)':<20} {len(inv_old):>12} {len(inv_now):>12} {len(inv_now)-len(inv_old):>+10}")
         except Exception:
             pass
