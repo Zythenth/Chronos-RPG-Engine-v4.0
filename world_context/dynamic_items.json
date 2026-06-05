@@ -1,0 +1,4 @@
+{
+  "_schema": "items[name] -> loot_manager.ITEM_SCHEMA-compatible item definition",
+  "items": {}
+}

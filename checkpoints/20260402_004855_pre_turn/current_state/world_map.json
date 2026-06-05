@@ -1,0 +1,11 @@
+{
+    "meta": {
+        "version": "1.0",
+        "last_updated": "TURNO_0",
+        "instrucao": "Atualizado pelo Architect a cada turno de exploração. Gerenciado via create_map_node() e update_map_node() — mechanics_engine Seção 35. O System_Engine decide quando criar/atualizar nós com base na ação do jogador. Lido pelo Game_Master para exibir o painel de mapa no HUD."
+    },
+    "areas": [],
+    "conexoes_pendentes": [],
+    "_area_id_counter": 0,
+    "_instrucao_ids": "IDs gerados pelo Architect. Formato: [prefixo_ambiente]_[N]. Incrementar _area_id_counter a cada nova área criada. Prefixos: selva_ | urb_ | nave_ | eva_ | pla_"
+}

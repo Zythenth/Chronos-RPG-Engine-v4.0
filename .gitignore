@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.py[cod]
+*.tmp
+.pytest_cache/
+drafts/*_raw_fail.txt
+drafts/*_report.txt

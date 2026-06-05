@@ -1,0 +1,31 @@
+[
+  {
+    "numero": "1",
+    "label": "[MANOBRA TATICA] Usar a corda improvisada imediatamente. Encontrar uma formação rochosa ou uma árvore mais robusta para tentar uma nova escalada, agora com o auxílio do equipamento.",
+    "archetype": "MANOBRA TATICA",
+    "cmd_suffix": [
+      "combat",
+      "--position",
+      "FLANQUEANDO"
+    ],
+    "raw": "1. [MANOBRA TATICA] Usar a corda improvisada imediatamente. Encontrar uma formação rochosa ou uma árvore mais robusta para tentar uma nova escalada, agora com o auxílio do equipamento."
+  },
+  {
+    "numero": "2",
+    "label": "[RECURSO] Inspecionar a Faca de Sucateiro. Verificar o fio da lâmina e a integridade do cabo após o trabalho forçado para garantir que a única ferramenta de corte não está danificada.",
+    "archetype": "RECURSO",
+    "cmd_suffix": [
+      "use"
+    ],
+    "raw": "2. [RECURSO] Inspecionar a Faca de Sucateiro. Verificar o fio da lâmina e a integridade do cabo após o trabalho forçado para garantir que a única ferramenta de corte não está danificada."
+  },
+  {
+    "numero": "3",
+    "label": "[ANALISE] Parar o trabalho e vasculhar a área imediata em busca de um local mais seguro para passar a noite, priorizando a busca por uma fonte de água antes que a escuridão torne a exploração impossível.",
+    "archetype": "ANALISE",
+    "cmd_suffix": [
+      "scan"
+    ],
+    "raw": "3. [ANALISE] Parar o trabalho e vasculhar a área imediata em busca de um local mais seguro para passar a noite, priorizando a busca por uma fonte de água antes que a escuridão torne a exploração impossível."
+  }
+]

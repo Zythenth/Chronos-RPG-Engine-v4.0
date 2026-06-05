@@ -1,0 +1,21 @@
+{
+  "id": "20260401_231853_pre_turn",
+  "ts": "20260401_231853",
+  "turno": 1,
+  "chapter": "Cap1",
+  "hp": "HP20/20",
+  "label": "pre_turn",
+  "files": [
+    "current_state/character_sheet.json",
+    "current_state/active_combat.json",
+    "current_state/chapter_tracker.json",
+    "current_state/world_map.json",
+    "current_state/inventory.csv",
+    "current_state/active_quests.md",
+    "world_context/campaign_log.md",
+    "world_context/story_bible.md",
+    "world_context/npc_dossier.md",
+    "world_context/bestiary.md"
+  ],
+  "errors": []
+}
