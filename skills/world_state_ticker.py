@@ -94,15 +94,18 @@ def _load_ct():
     if not os.path.exists(_CT_PATH):
         return {}
     try:
-        return json.load(open(_CT_PATH, encoding="utf-8"))
+        with open(_CT_PATH, encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
         return {}
 
 
 def _save_ct(ct):
     os.makedirs(_STATE_DIR, exist_ok=True)
-    with open(_CT_PATH, "w", encoding="utf-8") as f:
+    tmp = f"{_CT_PATH}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(ct, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, _CT_PATH)
 
 
 def _ensure_world_state(ct):
