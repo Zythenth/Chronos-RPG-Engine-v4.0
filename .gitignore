@@ -5,6 +5,12 @@ __pycache__/
 .pytest_cache/
 drafts/*_raw_fail.txt
 drafts/*_report.txt
+drafts/current_scene.md
+drafts/narrative_options.json
+drafts/chat_history.json
+drafts/technical_report.txt
+checkpoints/
 output/
 *.log
 resumo_projeto.md
+.chronos-test-*/
