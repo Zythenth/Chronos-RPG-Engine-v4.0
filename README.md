@@ -114,6 +114,18 @@ Checar imports centrais:
 py -B -c "import sys; sys.path.insert(0, 'skills'); import loot_manager, expansion_manager, world_context_loader, game_master, web_server; print('Core imports OK')"
 ```
 
+## Checkpoints e estado
+
+`current_state/` continua sendo a fonte de verdade em arquivos JSON/CSV/Markdown. Para reduzir risco de corrupção entre arquivos, `checkpoint_manager.py` salva snapshots em duas fases:
+
+- monta o checkpoint em um diretório temporário;
+- copia arquivos críticos de `current_state/` e `world_context/`;
+- gera `meta.json` com manifest, tamanho e SHA-256 de cada arquivo;
+- promove o diretório para o checkpoint final somente depois que tudo foi gravado;
+- restaura arquivos usando cópia temporária e `os.replace`.
+
+`checkpoints/` é artefato local de execução e fica fora do Git.
+
 ## Fluxo de um turno
 
 1. O frontend envia uma acao para `/api/turn`.
@@ -133,3 +145,4 @@ py -B -c "import sys; sys.path.insert(0, 'skills'); import loot_manager, expansi
 - Mantenha o servidor ligado apenas em `127.0.0.1`, salvo necessidade explicita.
 - Antes de mudar regras centrais, rode os testes de contrato.
 - Ao adicionar novos fluxos, registre pelo menos um teste em `validation/`.
+- Nao versione `checkpoints/` nem rascunhos em `drafts/`; eles sao estado local de execucao.
