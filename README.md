@@ -32,7 +32,9 @@ skills/
   expansion_manager.py   Registra novas entidades e itens dinamicos
   loot_manager.py        Tabelas de loot e schema de itens
   world_context_loader.py Carregamento de lore/contexto para prompts
-  web_ui/index.html      Interface web em arquivo unico
+  web_ui/index.html      Estrutura da interface web
+  web_ui/styles.css      Estilos visuais da interface
+  web_ui/app.js          Logica frontend e chamadas da API
 
 current_state/
   character_sheet.json   Ficha e progresso do personagem
