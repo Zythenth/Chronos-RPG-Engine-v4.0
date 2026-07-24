@@ -2,6 +2,14 @@
 
 Chronos e um motor de RPG narrativo hard sci-fi com interface web local. O projeto combina regras deterministicas em Python, estado persistido em arquivos JSON/CSV/Markdown e geracao narrativa via Gemini. A IA narra e sugere opcoes; as consequencias mecanicas ficam sob responsabilidade dos scripts Python.
 
+## Problema resolvido
+
+RPGs narrativos com IA podem perder consistência quando o modelo também controla regras, estado e consequências. O Chronos separa essas responsabilidades: scripts Python determinísticos aplicam a mecânica e persistem o mundo, enquanto o Gemini fica restrito à narração e à sugestão de opções.
+
+## Status atual
+
+Protótipo funcional em desenvolvimento, executado localmente, com interface web, persistência em arquivos, integração com Gemini e testes de contrato. O projeto ainda não é um produto hospedado nem uma engine genérica pronta para distribuição.
+
 ## O que o projeto faz
 
 - Mantem ficha, inventario, combate, mapa, clima, periodo e progresso do personagem.
@@ -9,7 +17,7 @@ Chronos e um motor de RPG narrativo hard sci-fi com interface web local. O proje
 - Exibe uma interface web local com HUD, narrativa, rolagens, inventario, mapa, missoes e acoes disponiveis.
 - Persiste memoria de campanha em arquivos Markdown dentro de `world_context/`.
 
-## Stack
+## Tecnologias utilizadas
 
 - Python 3
 - Flask para o servidor web local
