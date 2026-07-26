@@ -9,7 +9,7 @@ USO:
   Abre http://localhost:5000 no navegador.
 """
 
-import sys, io, os, json, csv, subprocess, threading, time
+import sys, io, os, json, csv, subprocess, threading, time, unicodedata
 from typing import Any, Dict, List, cast
 from flask import Flask, jsonify, request, send_from_directory  # type: ignore
 
@@ -47,6 +47,8 @@ _MAP_PATH    = os.path.join(_STATE_DIR, "world_map.json")
 _QUEST_PATH  = os.path.join(_STATE_DIR, "active_quests.md")
 _BST_PATH    = os.path.join(_CTX_DIR, "bestiary.md")
 _NPC_PATH    = os.path.join(_CTX_DIR, "npc_dossier.md")
+_CAMPAIGN_LOG_PATH = os.path.join(_CTX_DIR, "campaign_log.md")
+_STORY_BIBLE_PATH = os.path.join(_CTX_DIR, "story_bible.md")
 
 _SE = [sys.executable, os.path.join(_HERE, "system_engine.py")]
 _AR = [sys.executable, os.path.join(_HERE, "architect.py")]
@@ -61,6 +63,8 @@ pipeline_log: list[str] = []
 
 
 _CHAT_HISTORY_PATH = os.path.join(_DRAFT_DIR, "chat_history.json")
+_HISTORY_CHUNK_SIZE = 40
+_HISTORY_MAX_LIMIT = 80
 
 def _load_env():
     path = os.path.join(_PROJ, ".env")
@@ -95,6 +99,34 @@ def _read_json_any(path: str):
             return json.load(f)
     except Exception:
         return None
+
+
+def _load_chat_history() -> list:
+    if not os.path.exists(_CHAT_HISTORY_PATH):
+        return []
+    history = _read_json_any(_CHAT_HISTORY_PATH)
+    return history if isinstance(history, list) else []
+
+
+def _chat_history_payload(
+    history: list,
+    start: int | None = None,
+    limit: int = _HISTORY_CHUNK_SIZE,
+) -> dict:
+    total = len(history)
+    window_limit = min(max(limit, 1), _HISTORY_MAX_LIMIT)
+    window_start = max(0, total - window_limit) if start is None else max(0, min(start, total))
+    window_end = min(total, window_start + window_limit)
+    return {
+        "chat_history": history[window_start:window_end],
+        "chat_history_page": {
+            "start": window_start,
+            "end": window_end,
+            "total": total,
+            "has_older": window_start > 0,
+            "has_newer": window_end < total,
+        },
+    }
 
 
 def _read_csv(path: str) -> list:
@@ -397,11 +429,50 @@ def _get_available_skills(nivel: int, atributos: dict, adquiridas: list) -> list
 
 import re as _re
 
-def _parse_bestiary_for_codex() -> dict:
-    """Parse bestiary.md → {nome: {descricao}} para o codex do frontend."""
+
+def _normalize_codex_evidence(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or ""))
+    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+
+
+def _player_visible_codex_evidence() -> str:
+    """Agrega somente fontes já apresentadas ao jogador para autorizar entradas."""
+    combat = _read_json(_AC_PATH)
+    active_enemy = combat.get("inimigo", {}) if combat.get("combate_ativo", False) else {}
+    visible_chunks = [
+        _read(_CAMPAIGN_LOG_PATH, ""),
+        _read(_STORY_BIBLE_PATH, ""),
+        _read(_QUEST_PATH, ""),
+        _extract_narrative(_read(_SCENE_PATH, "")),
+        json.dumps(_read_json(_MAP_PATH).get("areas", []), ensure_ascii=False),
+        json.dumps(active_enemy, ensure_ascii=False),
+    ]
+    return _normalize_codex_evidence("\n".join(visible_chunks))
+
+
+def _entity_is_visible(name: str, normalized_evidence: str) -> bool:
+    """Nega por padrão; aceita apenas nome completo ou base registrado como visível."""
+    candidates = [name, _re.split(r"\s*[*(]", name, maxsplit=1)[0]]
+    for candidate in candidates:
+        normalized_name = _normalize_codex_evidence(candidate).strip()
+        if len(normalized_name) < 3:
+            continue
+        if _re.search(rf"(?<!\w){_re.escape(normalized_name)}(?!\w)", normalized_evidence):
+            return True
+    return False
+
+
+def _public_codex_name(name: str) -> str:
+    """Remove notas editoriais do título antes de expô-lo ao jogador."""
+    return _re.split(r"\s*[*(]", str(name or ""), maxsplit=1)[0].strip()
+
+
+def _parse_bestiary_for_codex(visible_evidence: str | None = None) -> dict:
+    """Expõe apenas o nome público de criaturas comprovadamente descobertas."""
     text = _read(_BST_PATH, "")
     if not text:
         return {}
+    evidence = _player_visible_codex_evidence() if visible_evidence is None else _normalize_codex_evidence(visible_evidence)
     result: Dict[str, dict] = {}
     entries = _re.split(r'^## Nome:\s*', text, flags=_re.MULTILINE)
     for entry in entries[1:]:
@@ -410,21 +481,22 @@ def _parse_bestiary_for_codex() -> dict:
         # Pula template e entradas sem nome real
         if not name or "___" in name or not any(c.isalpha() for c in name):
             continue
-        info: Dict[str, str] = {}
-        for line in lines:
-            for key in ("Classe", "Habitat", "Comportamento", "Fraqueza"):
-                if line.strip().startswith(f"- **{key}:**"):
-                    info[key] = line.split(f"- **{key}:**", 1)[1].strip()
-        parts = [f"{k}: {v}" for k, v in info.items() if v]
-        result[name] = {"descricao": ". ".join(parts) if parts else "Sem dados adicionais."}
+        if not _entity_is_visible(name, evidence):
+            continue
+        public_name = _public_codex_name(name)
+        if public_name:
+            # O bestiário é uma fonte do GM. A presença comprovada autoriza o
+            # nome, mas não classe, capítulo, comportamento ou fraquezas.
+            result[public_name] = {"descricao": ""}
     return result
 
 
-def _parse_npc_dossier_for_codex() -> dict:
-    """Parse npc_dossier.md → {nome: {descricao}} para o codex do frontend."""
+def _parse_npc_dossier_for_codex(visible_evidence: str | None = None) -> dict:
+    """Expõe somente o nome de pessoas já citadas em fontes visíveis."""
     text = _read(_NPC_PATH, "")
     if not text:
         return {}
+    evidence = _player_visible_codex_evidence() if visible_evidence is None else _normalize_codex_evidence(visible_evidence)
     result: Dict[str, dict] = {}
     sections = _re.split(r'^## \d+\.\s*', text, flags=_re.MULTILINE)
     for section in sections[1:]:
@@ -446,15 +518,13 @@ def _parse_npc_dossier_for_codex() -> dict:
                 name = title_m.group(1).strip()
         if not name:
             continue
-        # Junta bullet points como descrição
-        desc_lines = []
-        for line in lines[1:]:
-            line_s = line.strip()
-            if line_s.startswith('- **') and ':**' in line_s:
-                desc_lines.append(line_s.lstrip('- ').replace('**', ''))
-            elif line_s.startswith('- ') and not line_s.startswith('- `'):
-                desc_lines.append(line_s.lstrip('- '))
-        result[name] = {"descricao": ' '.join(desc_lines[:4]) if desc_lines else title}
+        if not _entity_is_visible(name, evidence):
+            continue
+        # O dossiê também contém planejamento do GM; a descoberta do nome não
+        # autoriza a exposição dos demais campos do arquivo.
+        public_name = _public_codex_name(name)
+        if public_name:
+            result[public_name] = {"descricao": ""}
     return result
 
 
@@ -504,6 +574,11 @@ def get_game_state() -> dict:
     
     clima_dict = cast(dict[str, Any], ws.get("clima", {}))
     periodo_dict = cast(dict[str, Any], ws.get("periodo", {}))
+    codex_evidence = _player_visible_codex_evidence()
+    codex_sources = {
+        "bestiary": os.path.isfile(_BST_PATH),
+        "npc_dossier": os.path.isfile(_NPC_PATH),
+    }
 
     in_combat = bool(ac.get("combate_ativo", False))
     raw_inimigo = ac.get("inimigo", {})
@@ -627,8 +702,12 @@ def get_game_state() -> dict:
         "mapa":        _parse_map(_read_json(_MAP_PATH)),
         "quests":      _parse_quests(_read(_QUEST_PATH, "")),
         "last_roll":   _parse_last_roll(_read(_REPORT_PATH, "")),
-        "bestiary":    _parse_bestiary_for_codex(),
-        "npc_dossier": _parse_npc_dossier_for_codex(),
+        "bestiary":    _parse_bestiary_for_codex(codex_evidence),
+        "npc_dossier": _parse_npc_dossier_for_codex(codex_evidence),
+        "codex_meta": {
+            "available": all(codex_sources.values()),
+            "unavailable_sources": [name for name, available in codex_sources.items() if not available],
+        },
     }
 
 
@@ -733,6 +812,22 @@ def index():
 
 @app.route("/api/state")
 def api_state():
+    essential_sources = {
+        "character_sheet": _CS_PATH,
+        "chapter_tracker": _CT_PATH,
+    }
+    unavailable_sources = []
+    for name, path in essential_sources.items():
+        source_data = _read_json_any(path)
+        if not isinstance(source_data, dict) or not source_data:
+            unavailable_sources.append(name)
+    if unavailable_sources:
+        return jsonify({
+            "error": "state_unavailable",
+            "message": "Não foi possível ler o estado local da campanha. Nenhum dado foi apresentado como válido.",
+            "unavailable_sources": unavailable_sources,
+        }), 503
+
     state = get_game_state()
     options = get_menu_options(state)
     narrative = _extract_narrative(_read(_SCENE_PATH, ""))
@@ -743,22 +838,35 @@ def api_state():
     for i in range(start_idx, log_size):
         recent_logs.append(str(pipeline_log[i]))
         
-    chat_history = []
-    try:
-        if os.path.exists(_CHAT_HISTORY_PATH):
-            data = _read_json_any(_CHAT_HISTORY_PATH)
-            if isinstance(data, list):
-                chat_history = data
-    except Exception:
-        pass
+    history_payload = _chat_history_payload(_load_chat_history())
             
     return jsonify({
         "state":        state,
         "options":      options,
         "narrative":    narrative,
         "log":          recent_logs,
-        "chat_history": chat_history,
+        **history_payload,
     })
+
+
+@app.route("/api/history")
+def api_history():
+    raw_start = request.args.get("start")
+    raw_limit = request.args.get("limit")
+    try:
+        start = int(raw_start) if raw_start is not None else None
+        limit = int(raw_limit) if raw_limit is not None else _HISTORY_CHUNK_SIZE
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "invalid_history_window",
+            "message": "O intervalo solicitado para o histórico é inválido.",
+        }), 400
+    if (start is not None and start < 0) or limit < 1:
+        return jsonify({
+            "error": "invalid_history_window",
+            "message": "O intervalo solicitado para o histórico é inválido.",
+        }), 400
+    return jsonify(_chat_history_payload(_load_chat_history(), start=start, limit=limit))
 
 
 @app.route("/api/scene")
@@ -772,22 +880,19 @@ def api_action():
         return jsonify({"error": "Pipeline em execução — aguarde."}), 429
 
     pipeline_log.clear()
+    turn_chat_history = None
     
     def _append_to_chat(role: str, text: str):
-        history = []
-        try:
-            if os.path.exists(_CHAT_HISTORY_PATH):
-                data = _read_json_any(_CHAT_HISTORY_PATH)
-                if isinstance(data, list):
-                    history = data
-        except: pass
+        history = _load_chat_history()
         history.append({"role": role, "text": text})
         try:
             _atomic_write_text(
                 _CHAT_HISTORY_PATH,
                 json.dumps(history, ensure_ascii=False, indent=2)
             )
-        except: pass
+        except Exception:
+            pass
+        return history
 
     try:
         body         = request.get_json(silent=True) or {}
@@ -844,14 +949,14 @@ def api_action():
             if "salvar" in raw_text.lower() and "checkpoint" in raw_text.lower():
                 action_type = "checkpoint_save"
             else:
-                append_player_text = f"> COMANDO: {raw_text.upper()}"
+                append_player_text = raw_text
         else:
             action_type  = str(body.get("type", "explore"))
             action_label = str(body.get("action_label", raw_text or action_type))
             cmd          = body.get("cmd", _SE + ["explore", "--dc", "medio"])
             if action_type.startswith("narrative_"):
                 # Captura escolha de menu
-                append_player_text = f"> COMANDO: {action_label.upper()}"
+                append_player_text = action_label
 
         # Converte e valida lista (vinda do JSON) contra comandos permitidos.
         if action_type not in ("checkpoint_save", "arc_check"):
@@ -864,8 +969,6 @@ def api_action():
                     "log": pipeline_log,
                 }), 400
             cmd = safe_cmd
-            if append_player_text:
-                _append_to_chat("player", append_player_text)
 
         # Ações de sistema (sem pipeline)
         if action_type == "checkpoint_save":
@@ -919,15 +1022,27 @@ def api_action():
                 pipeline_log.append("⚠ BLOQUEADO: distribua os pontos de atributo antes de continuar.")
                 state   = get_game_state()
                 options = get_menu_options(state)
-                return jsonify({"ok": False, "state": state, "options": options,
-                                "log": pipeline_log})
+                return jsonify({
+                    "ok": False,
+                    "error": "level_up_required",
+                    "message": "Distribua os pontos de atributo pendentes antes de avançar o turno.",
+                    "state": state,
+                    "options": options,
+                    "log": pipeline_log,
+                }), 409
             if _sk_pending:
                 pipeline_log.append("⚠ BLOQUEADO: escolha uma habilidade passiva antes de continuar.")
                 pipeline_log.append("  Clique em '🎓 HABILIDADE PASSIVA — ESCOLHER' no painel.")
                 state   = get_game_state()
                 options = get_menu_options(state)
-                return jsonify({"ok": False, "state": state, "options": options,
-                                "log": pipeline_log})
+                return jsonify({
+                    "ok": False,
+                    "error": "skill_choice_required",
+                    "message": "Escolha a habilidade passiva pendente antes de avançar o turno.",
+                    "state": state,
+                    "options": options,
+                    "log": pipeline_log,
+                }), 409
         except Exception:
             pass
 
@@ -1052,6 +1167,11 @@ def api_action():
         except Exception:
             pass
 
+        # Só persiste o comando depois que o turno foi aceito e concluído.
+        # Assim, bloqueios, erros e rollback não deixam ações falsas no histórico.
+        if append_player_text:
+            turn_chat_history = _append_to_chat("player", append_player_text)
+
         # Adiciona a resposta do GM ao chat history
         try:
             scene_raw = _read(_SCENE_PATH, "")
@@ -1077,13 +1197,16 @@ def api_action():
                 content_lines.append(l_str)
             narrative = "\n".join(content_lines).strip()
             if narrative:
-                _append_to_chat("gm", narrative)
+                turn_chat_history = _append_to_chat("gm", narrative)
         except Exception:
             pass
 
         state   = get_game_state()
         options = get_menu_options(state)
         scene   = _extract_narrative(_read(_SCENE_PATH, ""))
+        history_payload = _chat_history_payload(
+            turn_chat_history if turn_chat_history is not None else _load_chat_history()
+        )
 
         return jsonify({
             "ok":      True,
@@ -1091,6 +1214,7 @@ def api_action():
             "options": options,
             "scene":   scene,
             "log":     pipeline_log,
+            **history_payload,
         })
 
     except Exception as e:

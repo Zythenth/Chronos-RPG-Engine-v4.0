@@ -259,6 +259,356 @@ class ChronosContractTests(unittest.TestCase):
         self.assertTrue(web_server.pipeline_lock.acquire(blocking=False))
         web_server.pipeline_lock.release()
 
+    def test_api_state_rejects_unreadable_essential_sources(self):
+        import web_server
+
+        def read_source(path):
+            if path == web_server._CS_PATH:
+                return None
+            return {"valid": True}
+
+        with mock.patch.object(web_server, "_read_json_any", side_effect=read_source):
+            response = web_server.app.test_client().get("/api/state")
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "state_unavailable")
+        self.assertEqual(payload["unavailable_sources"], ["character_sheet"])
+        self.assertNotIn("state", payload)
+
+    def test_codex_bestiary_denies_entries_without_player_visible_evidence(self):
+        import web_server
+
+        bestiary = """
+# BESTIÁRIO
+## Nome: Predador Visível
+- **Classe:** Biológico
+- **Habitat:** Selva
+- **Comportamento:** Emboscada
+- **Fraqueza:** Luz
+
+## Nome: Leviatã Futuro *(Boss — Cap. 40)*
+- **Classe:** Oculto
+- **Habitat:** Futuro
+- **Comportamento:** Segredo
+- **Fraqueza:** ???
+"""
+        with mock.patch.object(web_server, "_read", return_value=bestiary):
+            parsed = web_server._parse_bestiary_for_codex(
+                "O diário confirma que o Predador Visível foi encontrado."
+            )
+
+        self.assertEqual(list(parsed), ["Predador Visível"])
+        self.assertNotIn("Leviatã Futuro", parsed)
+        self.assertEqual(parsed["Predador Visível"]["descricao"], "")
+
+    def test_codex_bestiary_never_exposes_gm_fields_or_editorial_suffixes(self):
+        import web_server
+
+        bestiary = """
+# BESTIÁRIO
+## Nome: Predador Alfa da Encosta *(Boss — Cap. 9)*
+- **Classe:** Boss secreto
+- **Habitat:** Encosta oculta
+- **Comportamento:** Emboscada final
+- **Fraqueza:** DC 18 em fogo
+"""
+        with mock.patch.object(web_server, "_read", return_value=bestiary):
+            parsed = web_server._parse_bestiary_for_codex(
+                "Ferro encontrou o Predador Alfa da Encosta."
+            )
+
+        self.assertEqual(
+            parsed,
+            {"Predador Alfa da Encosta": {"descricao": ""}},
+        )
+        serialized = json.dumps(parsed, ensure_ascii=False)
+        self.assertNotIn("Boss", serialized)
+        self.assertNotIn("Cap. 9", serialized)
+        self.assertNotIn("DC 18", serialized)
+
+    def test_codex_npc_parser_excludes_potential_contacts(self):
+        import web_server
+
+        dossier = """
+# DOSSIÊ
+## 1. O PROTAGONISTA
+**"Ferro" (JOGADOR)**
+- **Função:** Sucateiro.
+
+## 4. CONTATOS POTENCIAIS
+**"The Echo"**
+- **Função:** Contato futuro.
+"""
+        with mock.patch.object(web_server, "_read", return_value=dossier):
+            parsed = web_server._parse_npc_dossier_for_codex(
+                "Ferro registrou o início da jornada."
+            )
+
+        self.assertEqual(parsed, {"Ferro": {"descricao": ""}})
+        self.assertNotIn("The Echo", parsed)
+
+    def test_current_codex_payload_contains_no_future_bestiary_entries(self):
+        import web_server
+
+        state = web_server.get_game_state()
+
+        self.assertTrue(state["codex_meta"]["available"])
+        self.assertEqual(state["bestiary"], {})
+        self.assertEqual(set(state["npc_dossier"]), {"Ferro", "CHRONOS-7 ALPHA"})
+
+    def test_api_state_returns_only_the_latest_chat_history_chunk(self):
+        import web_server
+
+        history = [
+            {"role": "gm" if index % 2 == 0 else "player", "text": f"Mensagem {index}"}
+            for index in range(105)
+        ]
+
+        def read_source(path):
+            if path in {web_server._CS_PATH, web_server._CT_PATH}:
+                return {"valid": True}
+            if path == web_server._CHAT_HISTORY_PATH:
+                return history
+            return {}
+
+        with (
+            mock.patch.object(web_server, "_read_json_any", side_effect=read_source),
+            mock.patch.object(web_server, "get_game_state", return_value={}),
+            mock.patch.object(web_server, "get_menu_options", return_value=[]),
+            mock.patch.object(web_server, "_read", return_value=""),
+            mock.patch.object(
+                web_server.os.path,
+                "exists",
+                side_effect=lambda path: path == web_server._CHAT_HISTORY_PATH,
+            ),
+        ):
+            response = web_server.app.test_client().get("/api/state")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["chat_history"], history[-web_server._HISTORY_CHUNK_SIZE:])
+        self.assertEqual(
+            payload["chat_history_page"],
+            {
+                "start": 65,
+                "end": 105,
+                "total": 105,
+                "has_older": True,
+                "has_newer": False,
+            },
+        )
+
+    def test_api_history_returns_a_requested_bounded_chunk(self):
+        import web_server
+
+        history = [
+            {"role": "gm" if index % 2 == 0 else "player", "text": f"Mensagem {index}"}
+            for index in range(130)
+        ]
+
+        with (
+            mock.patch.object(web_server, "_read_json_any", return_value=history),
+            mock.patch.object(web_server.os.path, "exists", return_value=True),
+        ):
+            response = web_server.app.test_client().get("/api/history?start=40&limit=1000")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(len(payload["chat_history"]), web_server._HISTORY_MAX_LIMIT)
+        self.assertEqual(payload["chat_history"], history[40:120])
+        self.assertEqual(
+            payload["chat_history_page"],
+            {
+                "start": 40,
+                "end": 120,
+                "total": 130,
+                "has_older": True,
+                "has_newer": True,
+            },
+        )
+
+    def test_api_history_rejects_invalid_window_parameters(self):
+        import web_server
+
+        response = web_server.app.test_client().get("/api/history?start=-1&limit=nope")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "invalid_history_window")
+
+    def test_api_turn_returns_conflict_when_level_up_is_pending(self):
+        import web_server
+
+        sheet = self._base_character_sheet(attribute_points=1)
+        fake_state = {
+            "inventory": [],
+            "combat": {"ativo": False, "posicao": ""},
+            "character": {
+                "level_up_pending": True,
+                "skill_pending": False,
+                "attr_pts": 1,
+            },
+        }
+
+        with (
+            mock.patch.object(web_server, "get_game_state", return_value=fake_state),
+            mock.patch.object(web_server, "get_menu_options", return_value=[]),
+            mock.patch.object(web_server, "_read_json", return_value=sheet),
+            mock.patch.object(web_server, "_read_json_any", return_value=[]),
+            mock.patch.object(web_server, "_atomic_write_text") as atomic_write,
+        ):
+            response = web_server.app.test_client().post(
+                "/api/turn",
+                json={
+                    "type": "narrative_explore",
+                    "action_label": "Examinar os arredores",
+                    "cmd": web_server._SE + ["explore", "--dc", "medio"],
+                },
+            )
+
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "level_up_required")
+        self.assertIn("pontos de atributo", payload["message"])
+        atomic_write.assert_not_called()
+        self.assertTrue(web_server.pipeline_lock.acquire(blocking=False))
+        web_server.pipeline_lock.release()
+
+    def test_api_turn_persists_raw_player_command_only_after_success(self):
+        import importlib.util
+        import web_server
+
+        sheet = self._base_character_sheet()
+        existing_history = [
+            {"role": "gm", "text": "A porta se abre."},
+            {"role": "player", "text": "Entro no corredor."},
+        ]
+        history_after_player = [
+            *existing_history,
+            {"role": "player", "text": "Examinar os arredores"},
+        ]
+        history_reads = iter((existing_history, history_after_player))
+        fake_state = {
+            "inventory": [],
+            "combat": {"ativo": False, "posicao": ""},
+            "character": {
+                "level_up_pending": False,
+                "skill_pending": False,
+                "attr_pts": 0,
+            },
+        }
+        scene = """
+**PARTE 2 — NARRATIVA**
+O corredor permanece em silêncio.
+**PARTE 3 — O QUE VOCÊ FAZ?**
+1. Avançar.
+"""
+
+        def read_json(path):
+            if path == web_server._CS_PATH:
+                return sheet
+            if path == web_server._AC_PATH:
+                return self._base_active_combat(active=False)
+            return {}
+
+        with (
+            mock.patch.object(web_server, "get_game_state", return_value=fake_state),
+            mock.patch.object(web_server, "get_menu_options", return_value=[]),
+            mock.patch.object(web_server, "_read_json", side_effect=read_json),
+            mock.patch.object(
+                web_server,
+                "_read_json_any",
+                side_effect=lambda path: [
+                    dict(message) for message in next(history_reads)
+                ]
+                if path == web_server._CHAT_HISTORY_PATH
+                else [],
+            ),
+            mock.patch.object(web_server, "_read", return_value=scene),
+            mock.patch.object(web_server, "run_script", return_value=""),
+            mock.patch.object(
+                web_server.os.path,
+                "exists",
+                side_effect=lambda path: path == web_server._CHAT_HISTORY_PATH,
+            ),
+            mock.patch.object(web_server, "_atomic_write_text") as atomic_write,
+            mock.patch.object(importlib.util, "spec_from_file_location", return_value=None),
+        ):
+            response = web_server.app.test_client().post(
+                "/api/turn",
+                json={"action": "Examinar os arredores"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertGreaterEqual(atomic_write.call_count, 2)
+        player_history = json.loads(atomic_write.call_args_list[0].args[1])
+        self.assertEqual(player_history, history_after_player)
+        complete_history = json.loads(atomic_write.call_args_list[1].args[1])
+        self.assertEqual(complete_history[:2], existing_history)
+        self.assertEqual(complete_history[-2], history_after_player[-1])
+        self.assertEqual(
+            complete_history[-1],
+            {"role": "gm", "text": "O corredor permanece em silêncio."},
+        )
+        self.assertEqual(payload["chat_history"], complete_history)
+        self.assertEqual(
+            payload["chat_history_page"],
+            {
+                "start": 0,
+                "end": 4,
+                "total": 4,
+                "has_older": False,
+                "has_newer": False,
+            },
+        )
+
+    def test_api_turn_503_does_not_persist_player_command(self):
+        import importlib.util
+        import web_server
+
+        sheet = self._base_character_sheet()
+        fake_state = {
+            "inventory": [],
+            "combat": {"ativo": False, "posicao": ""},
+            "character": {
+                "level_up_pending": False,
+                "skill_pending": False,
+                "attr_pts": 0,
+            },
+        }
+
+        def read_json(path):
+            if path == web_server._CS_PATH:
+                return sheet
+            if path == web_server._AC_PATH:
+                return self._base_active_combat(active=False)
+            return {}
+
+        def run_script(_cmd, label, **_kwargs):
+            return "503 UNAVAILABLE" if "Game Master" in label else ""
+
+        with (
+            mock.patch.object(web_server, "get_game_state", return_value=fake_state),
+            mock.patch.object(web_server, "_read_json", side_effect=read_json),
+            mock.patch.object(web_server, "run_script", side_effect=run_script),
+            mock.patch.object(web_server.os.path, "exists", return_value=False),
+            mock.patch.object(web_server, "_atomic_write_text") as atomic_write,
+            mock.patch.object(importlib.util, "spec_from_file_location", return_value=None),
+        ):
+            response = web_server.app.test_client().post(
+                "/api/turn",
+                json={"action": "Examinar os arredores"},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "gemini_503")
+        atomic_write.assert_not_called()
+
     def test_checkpoint_manifest_detects_hash_mismatch(self):
         import checkpoint_manager
 

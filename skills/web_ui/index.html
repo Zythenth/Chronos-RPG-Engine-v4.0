@@ -3,188 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chronos OS v4.0 - Terminal Espaço-Temporal</title>
-    
-    <!-- Google Fonts -->
+    <meta name="color-scheme" content="dark">
+    <title>Chronos RPG Engine v4.0.1</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@100..800&family=Orbitron:wght@400..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <a class="skip-link" href="#main-content">Ir para o conteúdo principal</a>
 
-    <!-- ELEMENTO DE FUNDO ISOLADO -->
-    <canvas id="stars"></canvas>
-
-    <!-- OVERLAYS (Carregamento do Pipeline) -->
-    <div id="loader-overlay" style="display: none;">
-        <div class="spinner"></div>
-        <ul class="pipeline-stages">
-            <li>> [ SYS ] Sincronizando estado temporal...</li>
-            <li>> [ HUD ] Atualizando vitais do hospedeiro...</li>
-            <li>> [ IA ] Processando anomalia narrativa...</li>
-            <li><span class="glitch" data-text="> EXPORTANDO PACOTE">> EXPORTANDO PACOTE</span></li>
-        </ul>
-    </div>
-
-    <!-- MODAL UPGRADE -->
-    <div id="modal-levelup" style="display: none;">
-        <div class="modal-box">
-            <h2 class="glitch" data-text="UPGRADE DE MÓDULO DETECTADO">UPGRADE DE MÓDULO DETECTADO</h2>
-            <p style="color: var(--cyber-cyan); font-family: var(--font-ui);">Novo slot de habilidade disponível. Sistema pronto para expansão.</p>
-            <br>
-            <button class="btn-transmit" style="background: var(--cyber-magenta); color: #fff;">INICIALIZAR SEQUÊNCIA</button>
+    <dialog id="modal-levelup" class="modal-overlay" aria-labelledby="levelup-title">
+        <div class="modal-box" tabindex="-1">
+            <h2 id="levelup-title">Evolução pendente</h2>
+            <p>Sincronizando opções de evolução com o motor.</p>
         </div>
-    </div>
+    </dialog>
 
-    <!-- APLICAÇÃO GERAL -->
-    <div class="app-container">
-        
-        <!-- HEADER / TOPO -->
-        <header id="top-bar">
-            <div class="header-widget glitch-hover">
-                [COORDENADAS: <span class="coordinate-slot glitch" data-text="2142">2142</span> | SETOR <span class="coordinate-slot">09</span> | TURNO <span class="coordinate-slot">42</span>]
-            </div>
-            <div class="header-widget">
-                [STATUS DA NAVE: <span class="status-nave">ONLINE</span>]
+    <div id="chronos-app" class="terminal-window">
+        <header class="terminal-titlebar">
+            <nav class="terminal-tabs" aria-label="Áreas do Chronos">
+                <button id="nav-log" class="tab-btn terminal-tab active" type="button" aria-current="page" aria-controls="tab-log" data-target="tab-log">
+                    <svg class="terminal-tab-icon" aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="0.5" y="0.5" width="13" height="13" stroke="currentColor"/>
+                        <path d="M3 5.3 5.4 7 3 8.7M7 9h3.4" stroke="currentColor" stroke-linecap="square"/>
+                    </svg>
+                    <span>Log</span>
+                </button>
+                <button id="nav-dados" class="tab-btn terminal-tab" type="button" aria-controls="tab-dados" data-target="tab-dados">
+                    <svg class="terminal-tab-icon" aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="0.5" y="0.5" width="13" height="13" stroke="currentColor"/>
+                        <path d="M3 5.3 5.4 7 3 8.7M7 9h3.4" stroke="currentColor" stroke-linecap="square"/>
+                    </svg>
+                    <span>Dados</span>
+                </button>
+                <button id="nav-codex" class="tab-btn terminal-tab" type="button" aria-controls="tab-codex" data-target="tab-codex">
+                    <svg class="terminal-tab-icon" aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="0.5" y="0.5" width="13" height="13" stroke="currentColor"/>
+                        <path d="M3 5.3 5.4 7 3 8.7M7 9h3.4" stroke="currentColor" stroke-linecap="square"/>
+                    </svg>
+                    <span>Codex</span>
+                </button>
+            </nav>
+
+            <div class="window-controls" aria-hidden="true">
+                <span>_</span>
+                <span>□</span>
+                <span>×</span>
             </div>
         </header>
 
-        <!-- LAYOUT DE PAINÉIS -->
-        <div class="dashboard-grid">
-            
-            <!-- LATERAL ESQUERDA: HUD -->
-            <aside id="hud-sidebar" class="hud-sidebar">
-                
-                <!-- Vitais e Escalas Pessoais -->
-                <section class="hud-section">
-                    <h3 class="hud-title">VITAIS e RECURSOS</h3>
-                    
-                    <div class="vital-block hp">
-                        <div class="vital-label"><span>Integ. Física (HP)</span><span>18/25</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 72%;"></div></div>
+        <main id="main-content" class="main-panel" data-active-tab="tab-log" tabindex="-1">
+            <div class="tab-viewport">
+                <section id="tab-log" class="tab-content active" role="region" aria-labelledby="log-title">
+                    <h1 id="log-title" class="sr-only">Log de campanha</h1>
+
+                    <div class="terminal-banner" aria-label="Chronos versão 4.0.1">CHRONOS [versão 4.0.1]</div>
+
+                    <div id="system-status" class="system-status" data-state="loading" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
+                        <span class="status-code" aria-hidden="true">[SYNC]</span>
+                        <span id="system-status-message">Conectando ao estado local da campanha…</span>
+                        <button id="retry-state" class="status-action" type="button" hidden>[tentar novamente]</button>
+                        <button id="resume-levelup" class="status-action" type="button" hidden>[retomar evolução]</button>
                     </div>
 
-                    <div class="vital-block energy">
-                        <div class="vital-label"><span>Bateria (Energy)</span><span>72%</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 72%;"></div></div>
-                    </div>
-
-                    <div class="vital-block survival">
-                        <div class="vital-label"><span>Fome Térmica</span><span>45</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 45%;"></div></div>
-                    </div>
-
-                    <div class="vital-block survival">
-                        <div class="vital-label"><span>Necro-Sede</span><span>30</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 30%;"></div></div>
-                    </div>
-
-                    <div class="vital-block survival">
-                        <div class="vital-label"><span>Exaustão do Núcleo</span><span>60</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 60%;"></div></div>
-                    </div>
-
-                    <div class="vital-block o2">
-                        <div class="vital-label"><span>Suporte 02 (EVA)</span><span>100%</span></div>
-                        <div class="vital-bar-bg"><div class="vital-fill" style="width: 100%;"></div></div>
-                    </div>
-                </section>
-
-                <section class="hud-section">
-                    <h3 class="hud-title">INVENTÁRIO</h3>
-                    <ul class="hud-list">
-                        <li>Kit de Sobrevivência (Qt: 1)</li>
-                        <li>Rifle Gauss (Lv: 3, Dur: 15/20)</li>
-                        <li>Bateria Auxiliar (Qt: 2)</li>
-                    </ul>
-                </section>
-
-                <section class="hud-section">
-                    <h3 class="hud-title">SKILLS & PASSIVAS</h3>
-                    <ul class="hud-list">
-                        <li>Foco Cibernético [NV: 1]</li>
-                        <li>Engenharia Reversa [NV: 2]</li>
-                    </ul>
-                </section>
-
-                <section class="hud-section">
-                    <h3 class="hud-title">STATUS ATIVO</h3>
-                    <ul class="hud-list" style="color: var(--cyber-red);">
-                        <li class="glitch" data-text="Radiação Leve (-1 HP/t)">Radiação Leve (-1 HP/t)</li>
-                    </ul>
-                </section>
-
-            </aside>
-
-            <!-- LATERAL DIREITA: MAIN PANEL -->
-            <main class="main-panel">
-                
-                <nav class="tabs-header">
-                    <button class="tab-btn active" data-target="tab-log">[LOG]</button>
-                    <button class="tab-btn" data-target="tab-dados">[DADOS]</button>
-                    <button class="tab-btn" data-target="tab-codex">[CODEX]</button>
-                </nav>
-
-                <div class="tab-viewport">
-                    
-                    <!-- Aba: Chat/Log -->
-                    <div id="tab-log" class="tab-content active">
-                        <div class="chat-history">
-                            
-                            <!-- A IA e o Servidor popularão o chat nativamente através do loadState() -->
-
-                        </div>
-                    </div>
-
-                    <!-- Aba: Dados (Placeholder para ficha técnica extra) -->
-                    <div id="tab-dados" class="tab-content">
-                        <div id="dados-container" style="color: rgba(0,245,255,0.5); font-style: italic;">> Nenhum módulo diagnóstico conectado no momento.</div>
-                    </div>
-
-                    <!-- Aba: Codex -->
-                    <div id="tab-codex" class="tab-content">
-                        <div class="codex-search-container">
-                            <input type="text" class="codex-search-input" placeholder="> Buscar no banco de dados da história...">
-                        </div>
-                        <div class="codex-cards-grid">
-                            <div class="codex-card">
-                                <h3>ENTIDADE: Kael</h3>
-                                <p>NPC. Um mercenário cibernético encontrado no nível inferior de Vênus 3. Possui uma braço prostético visivelmente modificado.</p>
+                    <div class="log-stage">
+                        <div class="narrative-column">
+                            <div class="chat-history" aria-label="Narrativa e comandos da campanha" aria-busy="true">
+                                <p class="terminal-line system-line">
+                                    <span class="terminal-line-prompt" aria-hidden="true">C:\CHRONOS-7\SISTEMA&gt;</span>
+                                    <span class="terminal-line-text">Sincronizando a narrativa…</span>
+                                </p>
                             </div>
-                            <div class="codex-card">
-                                <h3>BESTIÁRIO: Devorador de Fios</h3>
-                                <p>CRIATURA. Mutante biomecânico que se alimenta de energia e cabos de fibra ótica. Sensível a armas EMP.</p>
+                            <p id="log-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+
+                            <form id="command-form" class="command-form">
+                                <label for="command-input" class="sr-only">Comando do personagem</label>
+                                <div class="command-line">
+                                    <span id="command-prompt" class="terminal-line-prompt" aria-hidden="true">C:\CHRONOS-7\FERRO&gt;</span>
+                                    <input
+                                        id="command-input"
+                                        type="text"
+                                        class="cmd-input-field"
+                                        autocomplete="off"
+                                        autocapitalize="sentences"
+                                        autofocus
+                                        aria-describedby="command-feedback"
+                                        disabled
+                                    >
+                                </div>
+                                <p id="command-feedback" class="command-feedback" role="status" aria-live="polite"></p>
+                            </form>
+
+                            <div id="narrative-actions" class="narrative-actions" hidden>
+                                <p class="actions-label">[sugestões da cena]</p>
+                                <div class="action-chips-container" aria-label="Ações sugeridas para o personagem"></div>
+                            </div>
+
+                        </div>
+
+                        <aside class="log-hud-summary" aria-labelledby="summary-state-title" data-critical="false">
+                            <section class="summary-section">
+                                <h2 id="summary-state-title">[ estado ]</h2>
+                                <dl class="summary-list">
+                                    <div class="context-item">
+                                        <dt>capítulo</dt>
+                                        <dd class="coordinate-slot" data-coordinate="chapter">—</dd>
+                                    </div>
+                                    <div class="context-item">
+                                        <dt>setor</dt>
+                                        <dd class="coordinate-slot" data-coordinate="sector">—</dd>
+                                    </div>
+                                    <div class="context-item">
+                                        <dt>turno</dt>
+                                        <dd class="coordinate-slot" data-coordinate="turn">—</dd>
+                                    </div>
+                                    <div>
+                                        <dt>hud</dt>
+                                        <dd id="summary-hud">—</dd>
+                                    </div>
+                                    <div>
+                                        <dt>status</dt>
+                                        <dd class="connection-state" data-connection-state="loading">
+                                            <span id="connection-label">sincronizando</span>
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </section>
+
+                            <section class="summary-section summary-character">
+                                <h2>
+                                    [ <span id="summary-character-name">—</span> · <small id="summary-level">nv.—</small> ]
+                                </h2>
+                                <dl class="ascii-vitals">
+                                    <div data-summary-vital="hp" data-critical="false">
+                                        <dt>integridade</dt>
+                                        <dd>
+                                            <span class="ascii-output" aria-hidden="true">[░░░░░░░░░░░░] —</span>
+                                            <span class="ascii-accessible sr-only">Integridade indisponível</span>
+                                        </dd>
+                                    </div>
+                                    <div data-summary-vital="energy">
+                                        <dt>energia</dt>
+                                        <dd>
+                                            <span class="ascii-output" aria-hidden="true">[░░░░░░░░░░░░] —</span>
+                                            <span class="ascii-accessible sr-only">Energia indisponível</span>
+                                        </dd>
+                                    </div>
+                                </dl>
+                                <p id="summary-context" class="summary-context">Aguardando estado local.</p>
+                                <button class="view-switch terminal-link" type="button" data-target="tab-hud" aria-controls="tab-hud">[abrir HUD completo]</button>
+                                <details id="system-tools" class="system-tools">
+                                    <summary>[ações do sistema]</summary>
+                                    <div class="utility-actions-container" aria-label="Ações do sistema"></div>
+                                </details>
+                            </section>
+                        </aside>
+                    </div>
+                </section>
+
+                <section id="tab-hud" class="tab-content hud-detail" role="region" aria-labelledby="hud-title" tabindex="0" hidden>
+                    <header class="content-header">
+                        <p class="section-kicker">Estado do personagem</p>
+                        <h2 id="hud-title">HUD completo</h2>
+                        <button class="view-switch terminal-link" type="button" data-target="tab-log" aria-controls="tab-log">[voltar ao Log]</button>
+                    </header>
+
+                    <section class="hud-section" aria-labelledby="vitals-title">
+                        <h3 id="vitals-title" class="hud-title">Vitais e recursos</h3>
+                        <div class="vitals-grid">
+                            <div class="vital-block hp" data-vital="hp">
+                                <div class="vital-label"><span>Integridade física</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Integridade física" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
+                            </div>
+                            <div class="vital-block energy" data-vital="energy">
+                                <div class="vital-label"><span>Energia</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Energia" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
+                            </div>
+                            <div class="vital-block survival" data-vital="fome">
+                                <div class="vital-label"><span>Fome</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Fome" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
+                            </div>
+                            <div class="vital-block survival" data-vital="sede">
+                                <div class="vital-label"><span>Sede</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Sede" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
+                            </div>
+                            <div class="vital-block survival" data-vital="exaustao">
+                                <div class="vital-label"><span>Exaustão</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Exaustão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
+                            </div>
+                            <div class="vital-block o2" data-vital="o2">
+                                <div class="vital-label"><span>Oxigênio</span><span>—</span></div>
+                                <div class="vital-bar-bg" role="progressbar" aria-label="Oxigênio" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="vital-fill"></div></div>
                             </div>
                         </div>
+                    </section>
+
+                    <div class="hud-columns">
+                        <section class="hud-section" aria-labelledby="inventory-title">
+                            <h3 id="inventory-title" class="hud-title">Inventário</h3>
+                            <ul id="inventory-list" class="hud-list"><li class="empty-list">Aguardando sincronização.</li></ul>
+                        </section>
+                        <section class="hud-section" aria-labelledby="skills-title">
+                            <h3 id="skills-title" class="hud-title">Skills e passivas</h3>
+                            <ul id="skills-list" class="hud-list"><li class="empty-list">Aguardando sincronização.</li></ul>
+                        </section>
+                        <section class="hud-section" aria-labelledby="status-title">
+                            <h3 id="status-title" class="hud-title">Status ativo</h3>
+                            <ul id="status-list" class="hud-list"><li class="empty-list">Aguardando sincronização.</li></ul>
+                        </section>
                     </div>
+                </section>
 
-                </div>
-
-                <!-- ÁREA DE INTERAÇÃO -->
-                <div class="interaction-footer">
-                    <div class="action-chips-container">
-                        <!-- Botões virão via backend -->
+                <section id="tab-dados" class="tab-content terminal-data-screen" role="region" aria-labelledby="dados-title" tabindex="0" hidden>
+                    <header class="terminal-page-header">
+                        <p class="terminal-path" aria-hidden="true">C:\CHRONOS-7\DADOS&gt;</p>
+                        <h2 id="dados-title">Dados do personagem</h2>
+                        <p id="dados-status" class="terminal-page-status" role="status" aria-live="polite" aria-atomic="true">Sincronizando dados do personagem…</p>
+                    </header>
+                    <div id="dados-container" class="terminal-empty" aria-busy="true">
+                        <p>[SYNC] Aguardando o estado local.</p>
                     </div>
+                </section>
 
-                    <div class="cmd-input-container">
+                <section id="tab-codex" class="tab-content terminal-codex-screen" role="region" aria-labelledby="codex-title" tabindex="0" hidden>
+                    <header class="terminal-page-header codex-page-header">
+                        <p class="terminal-path" aria-hidden="true">C:\CHRONOS-7\CODEX&gt;</p>
+                        <h2 id="codex-title">Arquivo consultável</h2>
+                        <form id="codex-search-form" class="codex-search-line" role="search">
+                            <label for="codex-search">Buscar no Codex</label>
+                            <div class="codex-command-line">
+                                <span class="terminal-line-prompt" aria-hidden="true">C:\CHRONOS-7\CODEX\BUSCA&gt;</span>
+                                <input id="codex-search" type="search" class="codex-search-input" autocomplete="off" aria-describedby="codex-search-hint codex-results-status">
+                                <button id="codex-clear-search" class="terminal-text-action" type="button" hidden>[limpar]</button>
+                            </div>
+                            <p id="codex-search-hint" class="terminal-hint">Consulte por nome, tipo ou texto. A busca ignora caixa e acentos.</p>
+                        </form>
+                        <p id="codex-results-status" class="terminal-page-status" role="status" aria-live="polite" aria-atomic="true">Sincronizando registros…</p>
+                    </header>
+                    <div id="codex-workspace" class="codex-workspace" aria-busy="true">
+                        <nav id="codex-index" class="codex-index" aria-label="Índice do Codex">
+                            <p class="terminal-empty">[SYNC] Aguardando registros descobertos.</p>
+                        </nav>
+                        <article id="codex-reader" class="codex-reader" tabindex="-1">
+                            <p class="terminal-empty">Selecione um registro no índice.</p>
+                        </article>
                     </div>
-
-                    <div class="terminal-bar">
-                        <div class="input-wrapper">
-                            <span class="terminal-prompt">></span>
-                            <input type="text" class="cmd-input-field" placeholder="AGUARDANDO COMANDO, AGENTE...">
-                            <span class="blinking-block"></span>
-                        </div>
-                        <button class="btn-transmit">[TRANSMITIR]</button>
-                    </div>
-                </div>
-
-            </main>
-
-        </div>
+                </section>
+            </div>
+        </main>
     </div>
 
-<script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
