@@ -14,3 +14,4 @@ output/
 *.log
 resumo_projeto.md
 .chronos-test-*/
+docs/
