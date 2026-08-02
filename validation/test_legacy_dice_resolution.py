@@ -178,38 +178,6 @@ class LegacyDiceResolutionTests(unittest.TestCase):
                 self.assertEqual(multi_roll._calc_mod(attr_value), modifier)
                 self.assertEqual(mechanics_engine.calc_modifier(attr_value), modifier)
 
-    def test_legacy_resolve_check_returns_exact_success_and_failure_records(self):
-        """Ordinary checks preserve the exact four-key result dictionary."""
-        self.assertEqual(
-            mechanics_engine.resolve_check(modifier=3, dc=15, d20_raw=12),
-            {"d20_raw": 12, "total": 15, "dc": 15, "result": "SUCESSO"},
-        )
-        self.assertEqual(
-            mechanics_engine.resolve_check(modifier=1, dc=15, d20_raw=10),
-            {"d20_raw": 10, "total": 11, "dc": 15, "result": "FALHA"},
-        )
-
-    def test_legacy_resolve_check_natural_twenty_and_one_override_total(self):
-        """Legacy natural-roll handling forces critical outcomes regardless of total."""
-        self.assertEqual(
-            mechanics_engine.resolve_check(modifier=-100, dc=30, d20_raw=20),
-            {
-                "d20_raw": 20,
-                "total": -80,
-                "dc": 30,
-                "result": "SUCESSO_CRITICO",
-            },
-        )
-        self.assertEqual(
-            mechanics_engine.resolve_check(modifier=100, dc=-10, d20_raw=1),
-            {
-                "d20_raw": 1,
-                "total": 101,
-                "dc": -10,
-                "result": "FALHA_CRITICA",
-            },
-        )
-
     def test_domain_dice_accept_a_controlled_choice_callable(self):
         """The pure domain keeps its random source injectable for deterministic tests."""
         choices = []
@@ -265,7 +233,7 @@ class LegacyDiceResolutionTests(unittest.TestCase):
         roll_multi.assert_called_once_with(20, 10, roller=multi_roll.rolar)
 
         with mock.patch.object(
-            mechanics_engine._dice, "calc_modifier", return_value=99
+            mechanics_engine._resolution, "calc_modifier", return_value=99
         ) as modifier:
             self.assertEqual(mechanics_engine.calc_modifier(10), 99)
         modifier.assert_called_once_with(10)

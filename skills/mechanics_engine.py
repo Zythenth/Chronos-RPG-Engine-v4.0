@@ -13,8 +13,8 @@ Novas entradas são adicionadas APENAS ao final de cada dicionário/lista.
 # ─────────────────────────────────────────────────────────────────────────────
 # 0. DADOS — regras compartilhadas de rolagem
 #
-# A tabela e o modificador abaixo preservam a interface pública legada e
-# delegam a política pura para chronos.domain.dice.
+# A tabela e os wrappers abaixo preservam a interface pública legada e
+# delegam a política pura para chronos.domain.
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
@@ -23,6 +23,7 @@ from typing import Optional, Any
 
 try:
     from chronos.domain import dice as _dice
+    from chronos.domain import resolution as _resolution
 except ModuleNotFoundError as exc:
     if exc.name != "chronos":
         raise
@@ -30,6 +31,7 @@ except ModuleNotFoundError as exc:
     if _ROOT not in sys.path:
         sys.path.insert(0, _ROOT)
     from chronos.domain import dice as _dice
+    from chronos.domain import resolution as _resolution
 
 # Resultado das últimas rolagens do turno — lido pelo System_Engine ao montar o log
 # mechanics_engine.py não mantém estado de last_roll e não possui funções de dado.
@@ -48,7 +50,7 @@ ROLL_TABLE = {
 
 def calc_modifier(attr_value: int) -> int:
     """Modificador de atributo = atributo − 10 (regra oficial, §1)."""
-    return _dice.calc_modifier(attr_value)
+    return _resolution.calc_modifier(attr_value)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTES DE COMBATE
@@ -221,27 +223,8 @@ def calculate_turn_cost(action: str, profile: str, planet: Optional[str] = None)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def resolve_check(modifier: int, dc: int, d20_raw: int) -> dict:
-    """
-    Recebe d20_raw pré-rolado, aplica o modificador e classifica o resultado.
-
-    Retorna dict com:
-      d20_raw:  int
-      total:    int — d20_raw + modifier
-      dc:       int — DC usada
-      result:   str — "SUCESSO_CRITICO" | "SUCESSO" | "FALHA" | "FALHA_CRITICA"
-    """
-    total   = d20_raw + modifier
-
-    if d20_raw == 20:
-        outcome = "SUCESSO_CRITICO"
-    elif d20_raw == 1:
-        outcome = "FALHA_CRITICA"
-    elif total >= dc:
-        outcome = "SUCESSO"
-    else:
-        outcome = "FALHA"
-
-    return {"d20_raw": d20_raw, "total": total, "dc": dc, "result": outcome}
+    """Delegate legacy test resolution to the deterministic domain rules."""
+    return _resolution.resolve_check(modifier, dc, d20_raw)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

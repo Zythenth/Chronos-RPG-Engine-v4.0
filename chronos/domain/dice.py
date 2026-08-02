@@ -3,6 +3,8 @@
 from collections.abc import Callable
 import secrets
 
+from .resolution import calc_modifier
+
 
 Choice = Callable[[range], int]
 Roller = Callable[[int, int], list[int]]
@@ -36,10 +38,6 @@ MULTI_ROLL_TABLE: tuple[tuple[int, str], ...] = (
 
 def clamp_attribute(attribute_value: int) -> int:
     return max(1, min(20, attribute_value))
-
-
-def calc_modifier(attribute_value: int) -> int:
-    return attribute_value - 10
 
 
 def multi_roll_rule(attribute_value: int) -> tuple[int, str]:
