@@ -26,6 +26,7 @@ import d20
 import d4
 import mechanics_engine
 import multi_roll
+from chronos.domain import dice
 
 
 class LegacyDiceResolutionTests(unittest.TestCase):
@@ -208,6 +209,74 @@ class LegacyDiceResolutionTests(unittest.TestCase):
                 "result": "FALHA_CRITICA",
             },
         )
+
+    def test_domain_dice_accept_a_controlled_choice_callable(self):
+        """The pure domain keeps its random source injectable for deterministic tests."""
+        choices = []
+
+        def choose_highest(values):
+            choices.append(values)
+            return values.stop - 1
+
+        self.assertEqual(dice.roll_d20(choice=choose_highest), 20)
+        self.assertEqual(dice.roll_d4(choice=choose_highest), 4)
+        self.assertEqual(choices, [range(1, 21), range(1, 5)])
+
+    def test_domain_multi_roll_accepts_a_controlled_roller(self):
+        """The domain receives rolls through a minimal callable seam."""
+        calls = []
+
+        def controlled_roller(faces, count):
+            calls.append((faces, count))
+            return [4, 17]
+
+        self.assertEqual(
+            dice.multi_roll(20, 10, roller=controlled_roller),
+            ([4, 17], 17, "MELHOR", ""),
+        )
+        self.assertEqual(calls, [(20, 2)])
+
+    def test_domain_rules_match_both_legacy_table_projections(self):
+        """Normalized domain rules preserve both public legacy table spellings."""
+        for attribute in range(1, 21):
+            with self.subTest(attribute=attribute):
+                count, criterion = dice.multi_roll_rule(attribute)
+                self.assertEqual(multi_roll.ROLL_TABLE[attribute], (count, criterion))
+                self.assertEqual(
+                    mechanics_engine.ROLL_TABLE[attribute],
+                    (count, dice.criterion_label(criterion)),
+                )
+
+    def test_legacy_adapters_delegate_to_the_domain(self):
+        """Adapters retain their public functions while routing policy to the domain."""
+        with mock.patch.object(d20._dice, "roll_d20", return_value=20) as roll_d20:
+            self.assertEqual(d20.rolar_d20(), 20)
+        roll_d20.assert_called_once_with(choice=d20.secrets.choice)
+
+        with mock.patch.object(d4._dice, "roll_d4", return_value=4) as roll_d4:
+            self.assertEqual(d4.rolar_d4(), 4)
+        roll_d4.assert_called_once_with(choice=d4.secrets.choice)
+
+        expected = ([4, 17], 17, "MELHOR", "")
+        with mock.patch.object(
+            multi_roll._dice, "multi_roll", return_value=expected
+        ) as roll_multi:
+            self.assertEqual(multi_roll.do_multi_roll(20, 10), expected)
+        roll_multi.assert_called_once_with(20, 10, roller=multi_roll.rolar)
+
+        with mock.patch.object(
+            mechanics_engine._dice, "calc_modifier", return_value=99
+        ) as modifier:
+            self.assertEqual(mechanics_engine.calc_modifier(10), 99)
+        modifier.assert_called_once_with(10)
+
+        import system_engine
+
+        with mock.patch.object(
+            system_engine._me, "calc_modifier", return_value=-99
+        ) as system_modifier:
+            self.assertEqual(system_engine._mod(10), -99)
+        system_modifier.assert_called_once_with(10)
 
 
 if __name__ == "__main__":

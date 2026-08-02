@@ -11,18 +11,25 @@ Novas entradas são adicionadas APENAS ao final de cada dicionário/lista.
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 0. DADOS — roll_d20() e roll_d4()
+# 0. DADOS — regras compartilhadas de rolagem
 #
-# Implementados aqui diretamente com secrets.choice — nenhum import de outro
-# módulo do projeto. mechanics_engine.py é módulo FOLHA: não importa d20.py,
-# d4.py nem nenhum outro arquivo do projeto.
-#
-# REGRA do pipeline: SEMPRE use roll_d20() / roll_d4() daqui.
-# NUNCA gere o número manualmente nem substitua por valor fixo.
+# A tabela e o modificador abaixo preservam a interface pública legada e
+# delegam a política pura para chronos.domain.dice.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import secrets as _secrets
+import os
+import sys
 from typing import Optional, Any
+
+try:
+    from chronos.domain import dice as _dice
+except ModuleNotFoundError as exc:
+    if exc.name != "chronos":
+        raise
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
+    from chronos.domain import dice as _dice
 
 # Resultado das últimas rolagens do turno — lido pelo System_Engine ao montar o log
 # mechanics_engine.py não mantém estado de last_roll e não possui funções de dado.
@@ -30,27 +37,18 @@ from typing import Optional, Any
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 0B. TABELA DE MULTI-ROLL (fonte única de verdade — mecanicas-oficiais.md §2)
+# 0B. TABELA DE MULTI-ROLL (projeção pública legada)
 #     Formato: atributo_bruto → (qtd_rolagens, critério)
 # ─────────────────────────────────────────────────────────────────────────────
 
 ROLL_TABLE = {
-     1: (5, "PIOR"),
-     2: (4, "PIOR"),   3: (4, "PIOR"),
-     4: (3, "PIOR"),   5: (3, "PIOR"),
-     6: (2, "PIOR"),   7: (2, "PIOR"),
-     8: (1, "ÚNICO"),  9: (1, "ÚNICO"),
-    10: (2, "MELHOR"), 11: (2, "MELHOR"),
-    12: (3, "MELHOR"), 13: (3, "MELHOR"),
-    14: (4, "MELHOR"), 15: (4, "MELHOR"),
-    16: (5, "MELHOR"), 17: (5, "MELHOR"),
-    18: (6, "MELHOR"), 19: (6, "MELHOR"),
-    20: (7, "MELHOR"),
+    attribute: (count, _dice.criterion_label(criterion))
+    for attribute, (count, criterion) in enumerate(_dice.MULTI_ROLL_TABLE, start=1)
 }
 
 def calc_modifier(attr_value: int) -> int:
     """Modificador de atributo = atributo − 10 (regra oficial, §1)."""
-    return attr_value - 10
+    return _dice.calc_modifier(attr_value)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTES DE COMBATE

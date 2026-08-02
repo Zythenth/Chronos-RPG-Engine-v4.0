@@ -17,6 +17,16 @@ import io
 import importlib.util as _ilu
 import os
 
+try:
+    from chronos.domain import dice as _dice
+except ModuleNotFoundError as exc:
+    if exc.name != "chronos":
+        raise
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
+    from chronos.domain import dice as _dice
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 _d20_spec = _ilu.spec_from_file_location("d20", os.path.join(_HERE, "d20.py"))
@@ -34,35 +44,16 @@ if hasattr(sys.stdout, 'reconfigure'):
 # Tabela: valor_atributo → (n_rolagens, criterio)
 # criterio: 'melhor' | 'pior' | 'unico'
 ROLL_TABLE = {
-    1:  (5, 'pior'),
-    2:  (4, 'pior'),
-    3:  (4, 'pior'),
-    4:  (3, 'pior'),
-    5:  (3, 'pior'),
-    6:  (2, 'pior'),
-    7:  (2, 'pior'),
-    8:  (1, 'unico'),
-    9:  (1, 'unico'),
-    10: (2, 'melhor'),
-    11: (2, 'melhor'),
-    12: (3, 'melhor'),
-    13: (3, 'melhor'),
-    14: (4, 'melhor'),
-    15: (4, 'melhor'),
-    16: (5, 'melhor'),
-    17: (5, 'melhor'),
-    18: (6, 'melhor'),
-    19: (6, 'melhor'),
-    20: (7, 'melhor'),
+    attribute: rule
+    for attribute, rule in enumerate(_dice.MULTI_ROLL_TABLE, start=1)
 }
 
 # Modificador = atributo − 10 (regra oficial, mecanicas-oficiais.md §1)
 def _calc_mod(attr_val: int) -> int:
-    return attr_val - 10
+    return _dice.calc_modifier(attr_val)
 
 def _fmt_mod(mod: int) -> str:
-    if mod == 0: return ''
-    return f'({mod:+})'
+    return _dice.modifier_suffix(mod)
 
 def rolar(faces, n):
     if faces == 20:
@@ -85,25 +76,7 @@ def do_multi_roll(faces: int, attr_val: int) -> tuple:
       - criterio   : str        — 'MELHOR' | 'PIOR' | 'ÚNICO'
       - sufixo_mod : str        — string de modificador, ex: '(+4)' ou ''
     """
-    clamped    = max(1, min(20, attr_val))
-    n_rolls, criterio_raw = ROLL_TABLE.get(clamped, (1, 'unico'))
-    modificador = _calc_mod(clamped)
-    sufixo      = _fmt_mod(modificador)
-
-    resultados = rolar(faces, n_rolls)
-
-    criterio_up = criterio_raw.upper()
-    if criterio_raw == 'melhor':
-        usado = max(resultados)
-        criterio_out = 'MELHOR'
-    elif criterio_raw == 'pior':
-        usado = min(resultados)
-        criterio_out = 'PIOR'
-    else:
-        usado = resultados[0]
-        criterio_out = 'ÚNICO'
-
-    return resultados, usado, criterio_out, sufixo
+    return _dice.multi_roll(faces, attr_val, roller=rolar)
 
 
 def main():
@@ -148,24 +121,9 @@ def main():
             print(f"ERRO: bônus deve ser um inteiro. Recebido: '{sys.argv[3]}'")
             sys.exit(1)
 
-    # Consulta tabela
-    n_rolls, criterio = ROLL_TABLE.get(attr_val, (1, 'unico'))
+    # Rola e seleciona pela regra central
+    resultados, usado, label, sufixo = do_multi_roll(faces, attr_val)
     modificador = _calc_mod(attr_val)
-    sufixo = _fmt_mod(modificador)
-
-    # Rola
-    resultados = rolar(faces, n_rolls)
-
-    # Seleciona
-    if criterio == 'melhor':
-        usado = max(resultados)
-        label = 'MELHOR'
-    elif criterio == 'pior':
-        usado = min(resultados)
-        label = 'PIOR'
-    else:
-        usado = resultados[0]
-        label = 'ÚNICO'
 
     # Calcula total final = resultado_selecionado + modificador + bônus (U-12)
     total = usado + modificador + bonus

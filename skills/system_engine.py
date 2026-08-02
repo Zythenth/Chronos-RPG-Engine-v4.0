@@ -244,7 +244,7 @@ def get_attr(cs: dict, abbr: str) -> int:
 
 def _mod(attr_val: int) -> int:
     """Modificador = Atributo − 10 (regra oficial)."""
-    return attr_val - 10
+    return _me.calc_modifier(attr_val)
 
 def get_skill_total(cs: dict, skill: str, passive_fx: dict) -> int:
     """Retorna atributo base + bônus de skill + bônus passivo."""
