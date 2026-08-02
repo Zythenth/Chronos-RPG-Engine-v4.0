@@ -24,6 +24,7 @@ from typing import Optional, Any
 try:
     from chronos.domain import dice as _dice
     from chronos.domain import resolution as _resolution
+    from chronos.domain import combat as _combat
 except ModuleNotFoundError as exc:
     if exc.name != "chronos":
         raise
@@ -32,6 +33,7 @@ except ModuleNotFoundError as exc:
         sys.path.insert(0, _ROOT)
     from chronos.domain import dice as _dice
     from chronos.domain import resolution as _resolution
+    from chronos.domain import combat as _combat
 
 # Resultado das últimas rolagens do turno — lido pelo System_Engine ao montar o log
 # mechanics_engine.py não mantém estado de last_roll e não possui funções de dado.
@@ -231,7 +233,7 @@ def resolve_check(modifier: int, dc: int, d20_raw: int) -> dict:
 # 7. RESOLUÇÃO DE COMBATE PESSOAL
 # ─────────────────────────────────────────────────────────────────────────────
 
-ARMOR_DAMAGE_REDUCTION = 2   # redução fixa quando item "Armadura" está no inventário
+ARMOR_DAMAGE_REDUCTION = _combat.ARMOR_DAMAGE_REDUCTION
 
 def resolve_personal_combat(
     player_attr: int,
@@ -254,54 +256,29 @@ def resolve_personal_combat(
 
     Retorna dict com resultados.
     """
-    check       = resolve_check(player_attr, enemy_dc, attack_d20_raw)
-    d20_raw     = check["d20_raw"]
-    is_critical = (d20_raw == 20)
-
     # Lookup arma (base + fabricadas)
     weapon = WEAPON_REGISTRY.get(weapon_name or "") or WEAPON_REGISTRY_FABRICADO.get(weapon_name or "", {})
-    weapon_bonus: int = weapon.get("damage_bonus", 0)
-
-    d4_raw = damage_d4_raw
-
-    if check["result"] in ("SUCESSO_CRITICO", "SUCESSO"):
-        base      = d4_raw * 2 if is_critical else d4_raw
-        damage_dealt = base + weapon_bonus
-    else:
-        damage_dealt = 0
-
-    # Redução de armadura dinâmica
-    reduction    = get_armor_reduction(armor_name)
-    damage_taken = max(0, enemy_damage - reduction) if not enemy_is_stunned else 0
-
-    # Efeito de status — rola chance somente se houve dano
-    effect_applied: Optional[str] = None
-    if damage_dealt > 0 and weapon.get("effect"):
-        effect_id = weapon["effect"]
-        effect_dc = weapon.get("effect_dc", 12)
-        if effect_d20_raw is not None and (effect_d20_raw >= effect_dc or is_critical):
-            effect_applied = effect_id
-
-    return {
-        "d20_raw":          d20_raw,
-        "total_attack":     check["total"],
-        "check_result":     check["result"],
-        "is_critical":      is_critical,
-        "d4_raw":           d4_raw,
-        "weapon_bonus":     weapon_bonus,
-        "damage_dealt":     damage_dealt,
-        "damage_reduction": reduction,
-        "damage_taken":     damage_taken,
-        "effect_applied":   effect_applied,
-    }
+    armor_definition = ARMOR_REGISTRY.get(armor_name) if armor_name else None
+    reduction = _combat.get_armor_reduction(armor_name, armor_definition)
+    return _combat.resolve_personal_combat(
+        player_attr=player_attr,
+        enemy_dc=enemy_dc,
+        enemy_damage=enemy_damage,
+        attack_d20_raw=attack_d20_raw,
+        damage_d4_raw=damage_d4_raw,
+        armor_reduction=reduction,
+        weapon_definition=weapon,
+        enemy_is_stunned=enemy_is_stunned,
+        effect_d20_raw=effect_d20_raw,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. RESOLUÇÃO DE COMBATE NAVAL (Ship-to-Ship)
 # ─────────────────────────────────────────────────────────────────────────────
 
-SHIP_DAMAGE_ON_SHIELDS = 15
-SHIP_DAMAGE_ON_HULL    = 10
+SHIP_DAMAGE_ON_SHIELDS = _combat.SHIP_DAMAGE_ON_SHIELDS
+SHIP_DAMAGE_ON_HULL    = _combat.SHIP_DAMAGE_ON_HULL
 
 def resolve_ship_combat(
     player_piloting: int,
@@ -316,23 +293,12 @@ def resolve_ship_combat(
 
     Retorna dict com resultados.
     """
-    check = resolve_check(player_piloting, enemy_ac, d20_raw)
-
-    if check["result"] in ("SUCESSO_CRITICO", "SUCESSO"):
-        if enemy_shields > 0:
-            shield_dmg, hull_dmg = SHIP_DAMAGE_ON_SHIELDS, 0
-        else:
-            shield_dmg, hull_dmg = 0, SHIP_DAMAGE_ON_HULL
-    else:
-        shield_dmg, hull_dmg = 0, 0
-
-    return {
-        "d20_raw":       check["d20_raw"],
-        "total_attack":  check["total"],
-        "check_result":  check["result"],
-        "shield_damage": shield_dmg,
-        "hull_damage":   hull_dmg,
-    }
+    return _combat.resolve_ship_combat(
+        player_piloting=player_piloting,
+        enemy_ac=enemy_ac,
+        enemy_shields=enemy_shields,
+        d20_raw=d20_raw,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -785,12 +751,8 @@ def get_armor_reduction(armor_name: Optional[str]) -> int:
     - Nome encontrado no registry → valor do registro
     - Nome não encontrado → ARMOR_DAMAGE_REDUCTION (fallback seguro)
     """
-    if not armor_name:
-        return 0
-    entry = ARMOR_REGISTRY.get(armor_name)
-    if entry is None:
-        return ARMOR_DAMAGE_REDUCTION  # fallback para armaduras futuras não registradas
-    return entry.get("damage_reduction", ARMOR_DAMAGE_REDUCTION)
+    entry = ARMOR_REGISTRY.get(armor_name) if armor_name else None
+    return _combat.get_armor_reduction(armor_name, entry)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
