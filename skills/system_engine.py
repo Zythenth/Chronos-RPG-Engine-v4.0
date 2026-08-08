@@ -380,9 +380,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
         d4p_used = _d4.rolar_d4() if preparation["requires_damage_roll"] else None
         ef_roll = _d20.rolar_d20() if preparation["requires_effect_roll"] else None
         last_attack_result = _combat.resolve_personal_attack(
-            player_modifier=des_modifier,
-            enemy_dc=dc_efetiva,
-            attack_d20_raw=d20_used,
+            preparation=preparation,
             damage_d4_raw=d4p_used,
             weapon_damage_bonus=weapon_bonus,
             fixed_damage_bonus=fixed_damage_bonus,
@@ -391,8 +389,6 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
             weapon_effect=weapon_effect,
             weapon_effect_dc=weapon_effect_dc,
             effect_d20_raw=ef_roll,
-            attack_bonus=attack_bonus,
-            attack_penalty=atk_penalty,
         )
         out = last_attack_result["outcome"]
         dmg = last_attack_result["damage_dealt"]

@@ -286,6 +286,11 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
             ),
             mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10]) as d20_roll,
             mock.patch.object(system_engine._d4, "rolar_d4") as player_damage,
+            mock.patch.object(
+                system_engine._combat.resolution,
+                "resolve_check",
+                wraps=system_engine._combat.resolution.resolve_check,
+            ) as resolve_check,
             mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
             mock.patch.object(
                 system_engine._combat,
@@ -302,6 +307,7 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
             )
 
         resolve_personal_attack.assert_called_once()
+        resolve_check.assert_called_once_with(0, 15, 14)
         player_damage.assert_not_called()
         self.assertEqual(d20_roll.call_count, 1)
         self.assertEqual(combat["inimigo"]["hp_atual"], 20)
@@ -310,11 +316,11 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
 
     def test_level_three_delegates_twice_unless_the_first_attack_fumbles(self):
         cases = (
-            (15, 18, 2, True),
-            (1, None, 1, False),
+            (15, 18, 2, True, 2),
+            (1, None, 1, False, 1),
         )
 
-        for first_roll, second_roll, expected_calls, has_multiattack in cases:
+        for first_roll, second_roll, expected_calls, has_multiattack, expected_checks in cases:
             with self.subTest(first_roll=first_roll):
                 character = _character()
                 character["progression"]["level"] = 3
@@ -328,6 +334,11 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
                     mock.patch.object(system_engine, "_roll", side_effect=rolls),
                     mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10]),
                     mock.patch.object(system_engine._d4, "rolar_d4", side_effect=[2]),
+                    mock.patch.object(
+                        system_engine._combat.resolution,
+                        "resolve_check",
+                        wraps=system_engine._combat.resolution.resolve_check,
+                    ) as resolve_check,
                     mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
                     mock.patch.object(
                         system_engine._combat,
@@ -344,6 +355,7 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
                     )
 
                 self.assertEqual(resolve_personal_attack.call_count, expected_calls)
+                self.assertEqual(resolve_check.call_count, expected_checks)
                 self.assertEqual(any("MULTI-ATAQUE" in line for line in report), has_multiattack)
 
     def test_final_resolver_receives_exact_live_attack_values(self):
@@ -352,6 +364,13 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
         combat = _combat(hull=40)
         combat["posicionamento"]["estado_atual"] = "FLANQUEANDO"
         report: list[str] = []
+        preparations: list[dict] = []
+        original_prepare = system_engine._combat.prepare_personal_attack
+
+        def prepare(*args, **kwargs):
+            preparation = original_prepare(*args, **kwargs)
+            preparations.append(preparation)
+            return preparation
 
         with (
             mock.patch.object(
@@ -368,6 +387,11 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
             mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
             mock.patch.object(
                 system_engine._combat,
+                "prepare_personal_attack",
+                side_effect=prepare,
+            ),
+            mock.patch.object(
+                system_engine._combat,
                 "resolve_personal_attack",
                 wraps=system_engine._combat.resolve_personal_attack,
             ) as resolve_personal_attack,
@@ -381,41 +405,22 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
             )
 
         self.assertEqual(combat["inimigo"]["hp_atual"], 11)
-        self.assertEqual(
+        self.assertEqual(len(preparations), 2)
+        for preparation, call, damage_roll, effect_roll in zip(
+            preparations,
             resolve_personal_attack.call_args_list,
-            [
-                mock.call(
-                    player_modifier=2,
-                    enemy_dc=15,
-                    attack_d20_raw=10,
-                    damage_d4_raw=2,
-                    weapon_damage_bonus=1,
-                    fixed_damage_bonus=4,
-                    melee_damage_bonus=5,
-                    position="FLANQUEANDO",
-                    weapon_effect="atordoamento",
-                    weapon_effect_dc=12,
-                    effect_d20_raw=12,
-                    attack_bonus=3,
-                    attack_penalty=0,
-                ),
-                mock.call(
-                    player_modifier=2,
-                    enemy_dc=15,
-                    attack_d20_raw=14,
-                    damage_d4_raw=3,
-                    weapon_damage_bonus=1,
-                    fixed_damage_bonus=4,
-                    melee_damage_bonus=5,
-                    position="FLANQUEANDO",
-                    weapon_effect="atordoamento",
-                    weapon_effect_dc=12,
-                    effect_d20_raw=11,
-                    attack_bonus=3,
-                    attack_penalty=-4,
-                ),
-            ],
-        )
+            (2, 3),
+            (12, 11),
+        ):
+            self.assertIs(call.kwargs["preparation"], preparation)
+            self.assertEqual(call.kwargs["damage_d4_raw"], damage_roll)
+            self.assertEqual(call.kwargs["effect_d20_raw"], effect_roll)
+            self.assertEqual(call.kwargs["weapon_damage_bonus"], 1)
+            self.assertEqual(call.kwargs["fixed_damage_bonus"], 4)
+            self.assertEqual(call.kwargs["melee_damage_bonus"], 5)
+            self.assertEqual(call.kwargs["position"], "FLANQUEANDO")
+            self.assertEqual(call.kwargs["weapon_effect"], "atordoamento")
+            self.assertEqual(call.kwargs["weapon_effect_dc"], 12)
 
     def test_successful_weapon_multiattack_keeps_cross_boundary_random_order(self):
         character = _character()
@@ -451,9 +456,7 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
         def prepare(*args, **kwargs):
             nonlocal preparation_count
             preparation_count += 1
-            attack_number = (preparation_count + 1) // 2
-            label = "prepare" if preparation_count % 2 else "domain prepare"
-            events.append(f"{label} {attack_number}")
+            events.append(f"prepare {preparation_count}")
             return original_prepare(*args, **kwargs)
 
         def resolve(*args, **kwargs):
@@ -492,13 +495,11 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
                 "damage one",
                 "effect one",
                 "final 1",
-                "domain prepare 1",
                 "attack two",
                 "prepare 2",
                 "damage two",
                 "effect two",
                 "final 2",
-                "domain prepare 2",
                 "enemy damage",
             ],
         )
@@ -562,6 +563,17 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
             )
 
         resolve_personal_attack.assert_called_once()
+        resolve_personal_attack.assert_called_once_with(
+            preparation=preparation,
+            damage_d4_raw=1,
+            weapon_damage_bonus=1,
+            fixed_damage_bonus=0,
+            melee_damage_bonus=0,
+            position="FLANQUEANDO",
+            weapon_effect="atordoamento",
+            weapon_effect_dc=12,
+            effect_d20_raw=1,
+        )
         self.assertEqual(combat["inimigo"]["hp_atual"], 14)
         self.assertEqual(
             combat["inimigo"]["status_effects"],

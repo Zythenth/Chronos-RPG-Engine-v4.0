@@ -2,6 +2,7 @@
 
 import ast
 import inspect
+import itertools
 import sys
 import unittest
 from pathlib import Path
@@ -36,6 +37,42 @@ SHIP_RESULT_KEYS = [
     "shield_damage",
     "hull_damage",
 ]
+
+
+def _resolve_live_personal_attack(
+    player_modifier: int,
+    enemy_dc: int,
+    attack_d20_raw: int,
+    damage_d4_raw: int | None,
+    weapon_damage_bonus: int = 0,
+    fixed_damage_bonus: int = 0,
+    melee_damage_bonus: int = 0,
+    position: str = "",
+    weapon_effect: str | None = None,
+    weapon_effect_dc: int | None = None,
+    effect_d20_raw: int | None = None,
+    attack_bonus: int = 0,
+    attack_penalty: int = 0,
+) -> dict:
+    preparation = combat.prepare_personal_attack(
+        player_modifier,
+        enemy_dc,
+        attack_d20_raw,
+        attack_bonus,
+        attack_penalty,
+        weapon_effect,
+    )
+    return combat.resolve_personal_attack(
+        preparation,
+        damage_d4_raw,
+        weapon_damage_bonus,
+        fixed_damage_bonus,
+        melee_damage_bonus,
+        position,
+        weapon_effect,
+        weapon_effect_dc,
+        effect_d20_raw,
+    )
 
 
 class CombatDomainTests(unittest.TestCase):
@@ -77,26 +114,151 @@ class CombatDomainTests(unittest.TestCase):
             with self.subTest(inputs=inputs):
                 self.assertEqual(combat.prepare_personal_attack(*inputs), expected)
 
-    def test_live_personal_attack_final_resolution_reuses_preparation(self):
-        with mock.patch.object(
-            resolution,
-            "resolve_check",
-            wraps=resolution.resolve_check,
-        ) as resolve_check:
-            result = combat.resolve_personal_attack(
+    def test_live_personal_attack_final_resolution_consumes_one_preparation(self):
+        with (
+            mock.patch.object(
+                resolution,
+                "resolve_check",
+                wraps=resolution.resolve_check,
+            ) as resolve_check,
+            mock.patch.object(
+                combat,
+                "prepare_personal_attack",
+                wraps=combat.prepare_personal_attack,
+            ) as prepare,
+            mock.patch.object(
+                combat,
+                "_resolve_personal_check",
+                wraps=combat._resolve_personal_check,
+            ) as resolve_personal_check,
+        ):
+            preparation = combat.prepare_personal_attack(
                 player_modifier=2,
                 enemy_dc=15,
                 attack_d20_raw=12,
-                damage_d4_raw=1,
                 attack_bonus=1,
+            )
+            result = combat.resolve_personal_attack(
+                preparation=preparation,
+                damage_d4_raw=1,
             )
 
         self.assertEqual(result["outcome"], "SUCESSO")
         self.assertEqual(result["damage_dealt"], 1)
+        prepare.assert_called_once()
+        resolve_personal_check.assert_called_once_with(3, 15, 12)
         resolve_check.assert_called_once_with(3, 15, 12)
 
+    def test_live_personal_attack_preserves_576_preparation_resolution_combinations(self):
+        combinations = itertools.product(
+            (1, 10, 20),
+            (0, 1),
+            (0, -4),
+            (0, 3),
+            (0, 1),
+            (0, 2),
+            ("DISTANCIA", "MELEE", "FLANQUEANDO"),
+            (None, "atordoamento"),
+        )
+
+        for (
+            attack_d20_raw,
+            attack_bonus,
+            attack_penalty,
+            damage_d4_raw,
+            weapon_damage_bonus,
+            fixed_damage_bonus,
+            position,
+            weapon_effect,
+        ) in combinations:
+            with self.subTest(
+                d20=attack_d20_raw,
+                bonus=attack_bonus,
+                penalty=attack_penalty,
+                damage=damage_d4_raw,
+                weapon_bonus=weapon_damage_bonus,
+                fixed_bonus=fixed_damage_bonus,
+                position=position,
+                effect=weapon_effect,
+            ):
+                preparation = combat.prepare_personal_attack(
+                    2,
+                    12,
+                    attack_d20_raw,
+                    attack_bonus,
+                    attack_penalty,
+                    weapon_effect,
+                )
+                result = combat.resolve_personal_attack(
+                    preparation,
+                    damage_d4_raw if preparation["requires_damage_roll"] else None,
+                    weapon_damage_bonus,
+                    fixed_damage_bonus,
+                    0,
+                    position,
+                    weapon_effect,
+                    12,
+                    12 if weapon_effect else None,
+                )
+
+                total_attack = attack_d20_raw + 2 + attack_bonus + attack_penalty
+                if attack_d20_raw == 20:
+                    check_result = "SUCESSO_CRITICO"
+                elif attack_d20_raw == 1:
+                    check_result = "FALHA_CRITICA"
+                elif total_attack >= 12:
+                    check_result = "SUCESSO"
+                else:
+                    check_result = "FALHA"
+                is_success = check_result in ("SUCESSO_CRITICO", "SUCESSO")
+                is_critical = check_result == "SUCESSO_CRITICO"
+                effective_d4_damage = damage_d4_raw * (2 if is_critical else 1) if is_success else 0
+                applied_weapon_bonus = weapon_damage_bonus if is_success else 0
+                applied_fixed_bonus = fixed_damage_bonus if is_success else 0
+                flanking_damage_bonus = 2 if is_success and position == "FLANQUEANDO" else 0
+                damage_dealt = (
+                    effective_d4_damage
+                    + applied_weapon_bonus
+                    + applied_fixed_bonus
+                    + flanking_damage_bonus
+                )
+                effect_eligible = bool(
+                    is_success
+                    and weapon_effect
+                    and (is_critical or 12 >= 12)
+                )
+
+                self.assertEqual(
+                    result,
+                    {
+                        "d20_raw": attack_d20_raw,
+                        "total_attack": total_attack,
+                        "check_result": check_result,
+                        "outcome": {
+                            "SUCESSO_CRITICO": "SUCESSO CRÍTICO",
+                            "SUCESSO": "SUCESSO",
+                            "FALHA": "FALHA",
+                            "FALHA_CRITICA": "FALHA CRÍTICA",
+                        }[check_result],
+                        "is_critical": is_critical,
+                        "requires_damage_roll": is_success,
+                        "requires_effect_roll": is_success and bool(weapon_effect),
+                        "d4_raw": damage_d4_raw if is_success else None,
+                        "effective_d4_damage": effective_d4_damage,
+                        "weapon_bonus": applied_weapon_bonus,
+                        "fixed_damage_bonus": applied_fixed_bonus,
+                        "melee_damage_bonus": 0,
+                        "flanking_damage_bonus": flanking_damage_bonus,
+                        "damage_dealt": damage_dealt,
+                        "effect_d20_raw": 12 if weapon_effect else None,
+                        "effect_dc": 12,
+                        "effect_eligible": effect_eligible,
+                        "effect_applied": weapon_effect if effect_eligible else None,
+                    },
+                )
+
     def test_live_personal_attack_uses_attack_and_damage_components(self):
-        result = combat.resolve_personal_attack(
+        result = _resolve_live_personal_attack(
             player_modifier=2,
             enemy_dc=15,
             attack_d20_raw=13,
@@ -124,13 +286,13 @@ class CombatDomainTests(unittest.TestCase):
         self.assertEqual(result["effect_applied"], "queimadura")
 
     def test_live_personal_attack_preserves_naturals_and_effect_eligibility(self):
-        ordinary_failure = combat.resolve_personal_attack(
+        ordinary_failure = _resolve_live_personal_attack(
             0, 15, 14, None, weapon_effect="atordoamento", effect_d20_raw=20
         )
-        natural_one = combat.resolve_personal_attack(
+        natural_one = _resolve_live_personal_attack(
             100, -10, 1, None, weapon_effect="atordoamento", effect_d20_raw=20
         )
-        critical = combat.resolve_personal_attack(
+        critical = _resolve_live_personal_attack(
             -100,
             30,
             20,
@@ -140,7 +302,7 @@ class CombatDomainTests(unittest.TestCase):
             weapon_effect_dc=20,
             effect_d20_raw=1,
         )
-        effect_refused = combat.resolve_personal_attack(
+        effect_refused = _resolve_live_personal_attack(
             0,
             10,
             10,
@@ -166,20 +328,20 @@ class CombatDomainTests(unittest.TestCase):
 
     def test_live_personal_attack_rejects_missing_required_success_rolls(self):
         with self.assertRaisesRegex(ValueError, "damage_d4_raw"):
-            combat.resolve_personal_attack(0, 10, 10, None)
+            _resolve_live_personal_attack(0, 10, 10, None)
 
         with self.assertRaisesRegex(ValueError, "effect_d20_raw"):
-            combat.resolve_personal_attack(
+            _resolve_live_personal_attack(
                 0, 10, 10, 1, weapon_effect="atordoamento"
             )
 
         with self.assertRaisesRegex(ValueError, "effect_d20_raw"):
-            combat.resolve_personal_attack(
+            _resolve_live_personal_attack(
                 -100, 30, 20, 1, weapon_effect="atordoamento"
             )
 
     def test_live_personal_attack_failure_accepts_missing_rolls(self):
-        result = combat.resolve_personal_attack(
+        result = _resolve_live_personal_attack(
             0,
             15,
             14,
@@ -194,7 +356,7 @@ class CombatDomainTests(unittest.TestCase):
 
     def test_live_and_legacy_effect_policies_differ_at_zero_damage(self):
         weapon = {"damage_bonus": 0, "effect": "atordoamento", "effect_dc": 12}
-        live_result = combat.resolve_personal_attack(
+        live_result = _resolve_live_personal_attack(
             player_modifier=0,
             enemy_dc=10,
             attack_d20_raw=10,
@@ -528,7 +690,7 @@ class CombatArchitectureTests(unittest.TestCase):
                 wraps=combat._resolve_personal_attack_core,
             ) as resolve_core,
         ):
-            live_result = combat.resolve_personal_attack(
+            live_result = _resolve_live_personal_attack(
                 player_modifier=2,
                 enemy_dc=15,
                 attack_d20_raw=13,
@@ -592,6 +754,44 @@ class CombatArchitectureTests(unittest.TestCase):
             function_source = ast.get_source_segment(source, functions[name])
             self.assertNotIn("damage_d4_raw *", function_source)
             self.assertNotIn("effect_d20_raw >=", function_source)
+
+        live_signature = inspect.signature(combat.resolve_personal_attack)
+        self.assertEqual(
+            list(live_signature.parameters),
+            [
+                "preparation",
+                "damage_d4_raw",
+                "weapon_damage_bonus",
+                "fixed_damage_bonus",
+                "melee_damage_bonus",
+                "position",
+                "weapon_effect",
+                "weapon_effect_dc",
+                "effect_d20_raw",
+            ],
+        )
+
+        live_calls = [
+            call
+            for call in ast.walk(functions["resolve_personal_attack"])
+            if isinstance(call, ast.Call)
+        ]
+        self.assertFalse(
+            any(
+                isinstance(call.func, ast.Name)
+                and call.func.id in {"prepare_personal_attack", "_resolve_personal_check"}
+                for call in live_calls
+            )
+        )
+        self.assertFalse(
+            any(
+                isinstance(call.func, ast.Attribute)
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id == "resolution"
+                and call.func.attr == "resolve_check"
+                for call in live_calls
+            )
+        )
 
     def test_domain_module_has_no_external_io_or_registry_dependencies(self):
         mechanics_source = ROOT / "skills" / "mechanics_engine.py"

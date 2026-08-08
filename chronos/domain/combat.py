@@ -98,9 +98,7 @@ def prepare_personal_attack(
 
 
 def resolve_personal_attack(
-    player_modifier: int,
-    enemy_dc: int,
-    attack_d20_raw: int,
+    preparation: Mapping[str, Any],
     damage_d4_raw: Optional[int],
     weapon_damage_bonus: int = 0,
     fixed_damage_bonus: int = 0,
@@ -109,18 +107,8 @@ def resolve_personal_attack(
     weapon_effect: Optional[str] = None,
     weapon_effect_dc: Optional[int] = None,
     effect_d20_raw: Optional[int] = None,
-    attack_bonus: int = 0,
-    attack_penalty: int = 0,
 ) -> dict:
-    """Resolve one live personal attack from its rolled and explicitly resolved inputs."""
-    preparation = prepare_personal_attack(
-        player_modifier=player_modifier,
-        enemy_dc=enemy_dc,
-        attack_d20_raw=attack_d20_raw,
-        attack_bonus=attack_bonus,
-        attack_penalty=attack_penalty,
-        weapon_effect=weapon_effect,
-    )
+    """Resolve one live personal attack from its prepared check and rolled inputs."""
 
     if preparation["requires_damage_roll"]:
         if damage_d4_raw is None:
