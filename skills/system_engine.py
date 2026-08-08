@@ -46,6 +46,16 @@ _spec = _ilu.spec_from_file_location("mechanics_engine", os.path.join(_HERE, "me
 _me   = _ilu.module_from_spec(_spec)  # type: ignore
 _spec.loader.exec_module(_me)          # type: ignore
 
+try:
+    from chronos.domain import combat as _combat
+except ModuleNotFoundError as exc:
+    if exc.name != "chronos":
+        raise
+    _ROOT = os.path.dirname(_HERE)
+    if _ROOT not in sys.path:
+        sys.path.insert(0, _ROOT)
+    from chronos.domain import combat as _combat
+
 _NAVAL_DEFAULT_AC = 15
 _NAVAL_DEFAULT_HULL = 10
 
@@ -344,6 +354,12 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
     dc_efetiva = max(1, dc_base - dc_penalty)
 
     attack_bonus = passive_fx.get("ataque_bonus", 0)
+    des_modifier = _mod(des_val)
+    weapon_effect = weapon.get("effect")
+    weapon_effect_dc = weapon.get("effect_dc")
+    fixed_damage_bonus = passive_fx.get("dano_bonus_fixo", 0)
+    melee_damage_bonus = passive_fx.get("dano_bonus_melee", 0)
+    last_attack_result: dict = {}
 
     # ── Função interna: executa um único ataque ────────────────────────────────
     def _single_attack(atk_penalty: int = 0) -> tuple[str, int, list, int, str, str]:
@@ -351,47 +367,54 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
         Retorna (outcome, damage_dealt, d20_rolls, d20_used, d20_crit, d20_suf).
         atk_penalty: penalidade de ataque (multi-ataque).
         """
+        nonlocal last_attack_result
         d20_rolls, d20_used, d20_crit, d20_suf = _roll(20, des_val)
-        is_crit   = (d20_used == 20)
-        is_fumble = (d20_used == 1)
+        preparation = _combat.prepare_personal_attack(
+            player_modifier=des_modifier,
+            enemy_dc=dc_efetiva,
+            attack_d20_raw=d20_used,
+            attack_bonus=attack_bonus,
+            attack_penalty=atk_penalty,
+            weapon_effect=weapon_effect,
+        )
+        d4p_used = _d4.rolar_d4() if preparation["requires_damage_roll"] else None
+        ef_roll = _d20.rolar_d20() if preparation["requires_effect_roll"] else None
+        last_attack_result = _combat.resolve_personal_attack(
+            player_modifier=des_modifier,
+            enemy_dc=dc_efetiva,
+            attack_d20_raw=d20_used,
+            damage_d4_raw=d4p_used,
+            weapon_damage_bonus=weapon_bonus,
+            fixed_damage_bonus=fixed_damage_bonus,
+            melee_damage_bonus=melee_damage_bonus,
+            position=posicao,
+            weapon_effect=weapon_effect,
+            weapon_effect_dc=weapon_effect_dc,
+            effect_d20_raw=ef_roll,
+            attack_bonus=attack_bonus,
+            attack_penalty=atk_penalty,
+        )
+        out = last_attack_result["outcome"]
+        dmg = last_attack_result["damage_dealt"]
 
-        total_attack = d20_used + _mod(des_val) + attack_bonus + atk_penalty
+        if last_attack_result["flanking_damage_bonus"]:
+            report.append(
+                f"   ★ FLANQUEANDO: +{last_attack_result['flanking_damage_bonus']} dano de flanqueio"
+            )
 
-        if is_crit:
-            out = "SUCESSO CRÍTICO"
-        elif is_fumble:
-            out = "FALHA CRÍTICA"
-        elif total_attack >= dc_efetiva:
-            out = "SUCESSO"
-        else:
-            out = "FALHA"
-
-        dmg = 0
-        if out in ("SUCESSO CRÍTICO", "SUCESSO"):
-            # d4 de dano: rolagem simples (multi-roll é apenas para d20)
-            d4p_used = _d4.rolar_d4()
-            base_dmg   = d4p_used * 2 if is_crit else d4p_used
-            dano_fixo  = passive_fx.get("dano_bonus_fixo", 0)
-            dano_melee = passive_fx.get("dano_bonus_melee", 0) if posicao in ("MELEE","FLANQUEANDO") else 0
-            # Flanqueio real: bônus direto de posicionamento
-            dano_flank = _me.FLANQUEAR_DAMAGE_BONUS if posicao == "FLANQUEANDO" else 0
-            dmg = base_dmg + weapon_bonus + dano_fixo + dano_melee + dano_flank
-
-            if dano_flank:
-                report.append(f"   ★ FLANQUEANDO: +{dano_flank} dano de flanqueio")
-
-            # Efeito de arma
-            if weapon.get("effect"):
-                ef_dc   = weapon.get("effect_dc", 12)
-                ef_roll = _d20.rolar_d20()
-                if ef_roll >= ef_dc or is_crit:
-                    _me.apply_new_effect(inimigo["status_effects"], weapon["effect"])
-                    report.append(f"   Efeito aplicado: {weapon['effect']} (roll={ef_roll} vs DC{ef_dc})")
+        if last_attack_result["effect_applied"]:
+            _me.apply_new_effect(
+                inimigo["status_effects"], last_attack_result["effect_applied"]
+            )
+            report.append(
+                f"   Efeito aplicado: {last_attack_result['effect_applied']} "
+                f"(roll={last_attack_result['effect_d20_raw']} vs DC{last_attack_result['effect_dc']})"
+            )
 
         pen_str = f" (pen {atk_penalty:+})" if atk_penalty else ""
         report.append(f"   D20 {des_val}(mod {_mod(des_val):+}){pen_str}: {d20_rolls} → USADO: {d20_used} ({d20_crit})")
         atk_bonus_str = f"+{attack_bonus}" if attack_bonus > 0 else (f"{attack_bonus}" if attack_bonus else "")
-        report.append(f"   Total ataque: {d20_used}+{_mod(des_val)}(DES mod){atk_bonus_str}{pen_str} = {total_attack} vs DC {dc_efetiva} → {out}")
+        report.append(f"   Total ataque: {d20_used}+{_mod(des_val)}(DES mod){atk_bonus_str}{pen_str} = {last_attack_result['total_attack']} vs DC {dc_efetiva} → {out}")
         if dmg:
             report.append(f"   Dano causado: {dmg}")
 
@@ -409,6 +432,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
     first_d20_used   = u1
     first_d20_crit   = c1
     first_d20_suf    = s1
+    first_attack_result = last_attack_result
     total_damage_dealt += dmg1
 
     # Multi-ataque (nível >= _me.MULTI_ATTACK_MIN_LEVEL)
@@ -509,7 +533,7 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
     _print_hud(cs, ac, first_d20_rolls, first_d20_used, first_d20_crit, first_d20_suf, des_val, "DES",
                [], None, None,
                d4e_raw, racial, enemy_damage_total,
-               first_d20_used + _mod(des_val) + attack_bonus if first_d20_used else 0,
+               first_attack_result["total_attack"] if first_d20_used else 0,
                dc_efetiva, first_outcome, report)
 
 

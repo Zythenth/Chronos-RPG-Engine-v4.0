@@ -62,7 +62,7 @@ def calc_modifier(attr_value: int) -> int:
 MORAL_FLEE_THRESHOLD = 0.30
 
 # Flanqueio: bônus de dano extra além do dano_bonus_melee das passivas
-FLANQUEAR_DAMAGE_BONUS = 2
+FLANQUEAR_DAMAGE_BONUS = _combat.FLANQUEAR_DAMAGE_BONUS
 
 # Multi-ataque: disponível a partir deste nível e com respectiva penalidade
 MULTI_ATTACK_MIN_LEVEL = 3

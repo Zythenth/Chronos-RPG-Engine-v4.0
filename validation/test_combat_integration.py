@@ -249,3 +249,326 @@ class LiveNavalActionIntegrationTests(unittest.TestCase):
         resolve_ship_combat.assert_called_once()
         self.assertEqual(combat["inimigo"]["escudos_atuais"], 0)
         self.assertTrue(any("6 dano nos escudos → 6 para 0" in line for line in report))
+
+
+class LivePersonalActionIntegrationTests(unittest.TestCase):
+    def test_action_has_one_direct_final_domain_delegation_and_no_local_attack_formula(self):
+        source = inspect.getsource(system_engine.action_combat)
+        tree = ast.parse(source)
+        domain_calls = [
+            call
+            for call in ast.walk(tree)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "_combat"
+        ]
+        call_names = [call.func.attr for call in domain_calls]
+
+        self.assertEqual(call_names.count("prepare_personal_attack"), 1)
+        self.assertEqual(call_names.count("resolve_personal_attack"), 1)
+        self.assertNotIn("total_attack =", source)
+        self.assertNotIn("d20_used == 20", source)
+        self.assertNotIn("d20_used == 1", source)
+        self.assertNotIn("dano_flank =", source)
+        self.assertNotIn("ef_roll >=", source)
+
+    def test_level_one_delegates_once_and_failure_does_not_roll_damage_or_effect(self):
+        character = _character()
+        combat = _combat()
+        report: list[str] = []
+
+        with (
+            mock.patch.object(
+                system_engine,
+                "_roll",
+                side_effect=[([10], 10, "ÚNICO", ""), ([14], 14, "ÚNICO", "")],
+            ),
+            mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10]) as d20_roll,
+            mock.patch.object(system_engine._d4, "rolar_d4") as player_damage,
+            mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
+            mock.patch.object(
+                system_engine._combat,
+                "resolve_personal_attack",
+                wraps=system_engine._combat.resolve_personal_attack,
+            ) as resolve_personal_attack,
+        ):
+            system_engine.action_combat(
+                character,
+                combat,
+                SimpleNamespace(position=None, weapon="Pistola de Choque"),
+                {},
+                report,
+            )
+
+        resolve_personal_attack.assert_called_once()
+        player_damage.assert_not_called()
+        self.assertEqual(d20_roll.call_count, 1)
+        self.assertEqual(combat["inimigo"]["hp_atual"], 20)
+        self.assertEqual(combat["inimigo"]["status_effects"], [])
+        self.assertTrue(any("→ FALHA" in line for line in report))
+
+    def test_level_three_delegates_twice_unless_the_first_attack_fumbles(self):
+        cases = (
+            (15, 18, 2, True),
+            (1, None, 1, False),
+        )
+
+        for first_roll, second_roll, expected_calls, has_multiattack in cases:
+            with self.subTest(first_roll=first_roll):
+                character = _character()
+                character["progression"]["level"] = 3
+                combat = _combat()
+                report: list[str] = []
+                rolls = [([10], 10, "ÚNICO", ""), ([first_roll], first_roll, "ÚNICO", "")]
+                if second_roll is not None:
+                    rolls.append(([second_roll], second_roll, "ÚNICO", ""))
+
+                with (
+                    mock.patch.object(system_engine, "_roll", side_effect=rolls),
+                    mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10]),
+                    mock.patch.object(system_engine._d4, "rolar_d4", side_effect=[2]),
+                    mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
+                    mock.patch.object(
+                        system_engine._combat,
+                        "resolve_personal_attack",
+                        wraps=system_engine._combat.resolve_personal_attack,
+                    ) as resolve_personal_attack,
+                ):
+                    system_engine.action_combat(
+                        character,
+                        combat,
+                        SimpleNamespace(position=None, weapon=None),
+                        {},
+                        report,
+                    )
+
+                self.assertEqual(resolve_personal_attack.call_count, expected_calls)
+                self.assertEqual(any("MULTI-ATAQUE" in line for line in report), has_multiattack)
+
+    def test_final_resolver_receives_exact_live_attack_values(self):
+        character = _character(dexterity=12)
+        character["progression"]["level"] = 3
+        combat = _combat(hull=40)
+        combat["posicionamento"]["estado_atual"] = "FLANQUEANDO"
+        report: list[str] = []
+
+        with (
+            mock.patch.object(
+                system_engine,
+                "_roll",
+                side_effect=[
+                    ([10], 10, "ÚNICO", ""),
+                    ([10], 10, "ÚNICO", ""),
+                    ([14], 14, "ÚNICO", ""),
+                ],
+            ),
+            mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10, 12, 11]),
+            mock.patch.object(system_engine._d4, "rolar_d4", side_effect=[2, 3]),
+            mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
+            mock.patch.object(
+                system_engine._combat,
+                "resolve_personal_attack",
+                wraps=system_engine._combat.resolve_personal_attack,
+            ) as resolve_personal_attack,
+        ):
+            system_engine.action_combat(
+                character,
+                combat,
+                SimpleNamespace(position=None, weapon="Pistola de Choque"),
+                {"ataque_bonus": 3, "dano_bonus_fixo": 4, "dano_bonus_melee": 5},
+                report,
+            )
+
+        self.assertEqual(combat["inimigo"]["hp_atual"], 11)
+        self.assertEqual(
+            resolve_personal_attack.call_args_list,
+            [
+                mock.call(
+                    player_modifier=2,
+                    enemy_dc=15,
+                    attack_d20_raw=10,
+                    damage_d4_raw=2,
+                    weapon_damage_bonus=1,
+                    fixed_damage_bonus=4,
+                    melee_damage_bonus=5,
+                    position="FLANQUEANDO",
+                    weapon_effect="atordoamento",
+                    weapon_effect_dc=12,
+                    effect_d20_raw=12,
+                    attack_bonus=3,
+                    attack_penalty=0,
+                ),
+                mock.call(
+                    player_modifier=2,
+                    enemy_dc=15,
+                    attack_d20_raw=14,
+                    damage_d4_raw=3,
+                    weapon_damage_bonus=1,
+                    fixed_damage_bonus=4,
+                    melee_damage_bonus=5,
+                    position="FLANQUEANDO",
+                    weapon_effect="atordoamento",
+                    weapon_effect_dc=12,
+                    effect_d20_raw=11,
+                    attack_bonus=3,
+                    attack_penalty=-4,
+                ),
+            ],
+        )
+
+    def test_successful_weapon_multiattack_keeps_cross_boundary_random_order(self):
+        character = _character()
+        character["progression"]["level"] = 3
+        combat = _combat(hull=100)
+        events: list[str] = []
+        report: list[str] = []
+        original_prepare = system_engine._combat.prepare_personal_attack
+        original_resolve = system_engine._combat.resolve_personal_attack
+        player_labels = iter(("player initiative", "attack one", "attack two"))
+        player_rolls = iter(
+            (([10], 10, "ÚNICO", ""), ([15], 15, "ÚNICO", ""), ([19], 19, "ÚNICO", ""))
+        )
+        d20_labels = iter(("enemy initiative", "effect one", "effect two"))
+        d20_rolls = iter((10, 12, 12))
+        d4_labels = iter(("damage one", "damage two"))
+        d4_rolls = iter((2, 3))
+        preparation_count = 0
+        final_count = 0
+
+        def player_roll(*_args):
+            events.append(next(player_labels))
+            return next(player_rolls)
+
+        def d20_roll():
+            events.append(next(d20_labels))
+            return next(d20_rolls)
+
+        def d4_roll():
+            events.append(next(d4_labels))
+            return next(d4_rolls)
+
+        def prepare(*args, **kwargs):
+            nonlocal preparation_count
+            preparation_count += 1
+            attack_number = (preparation_count + 1) // 2
+            label = "prepare" if preparation_count % 2 else "domain prepare"
+            events.append(f"{label} {attack_number}")
+            return original_prepare(*args, **kwargs)
+
+        def resolve(*args, **kwargs):
+            nonlocal final_count
+            final_count += 1
+            events.append(f"final {final_count}")
+            return original_resolve(*args, **kwargs)
+
+        def enemy_d4():
+            events.append("enemy damage")
+            return 1
+
+        with (
+            mock.patch.object(system_engine, "_roll", side_effect=player_roll),
+            mock.patch.object(system_engine._d20, "rolar_d20", side_effect=d20_roll),
+            mock.patch.object(system_engine._d4, "rolar_d4", side_effect=d4_roll),
+            mock.patch.object(system_engine, "_roll_enemy_d4", side_effect=enemy_d4),
+            mock.patch.object(system_engine._combat, "prepare_personal_attack", side_effect=prepare),
+            mock.patch.object(system_engine._combat, "resolve_personal_attack", side_effect=resolve),
+        ):
+            system_engine.action_combat(
+                character,
+                combat,
+                SimpleNamespace(position=None, weapon="Pistola de Choque"),
+                {},
+                report,
+            )
+
+        self.assertEqual(
+            events,
+            [
+                "player initiative",
+                "enemy initiative",
+                "attack one",
+                "prepare 1",
+                "damage one",
+                "effect one",
+                "final 1",
+                "domain prepare 1",
+                "attack two",
+                "prepare 2",
+                "damage two",
+                "effect two",
+                "final 2",
+                "domain prepare 2",
+                "enemy damage",
+            ],
+        )
+
+    def test_final_domain_result_governs_damage_effect_flank_total_and_hud(self):
+        character = _character()
+        combat = _combat(hull=20)
+        combat["posicionamento"]["estado_atual"] = "FLANQUEANDO"
+        report: list[str] = []
+        preparation = {
+            "d20_raw": 15,
+            "total_attack": 15,
+            "check_result": "SUCESSO",
+            "outcome": "SUCESSO",
+            "is_critical": False,
+            "requires_damage_roll": True,
+            "requires_effect_roll": True,
+        }
+        final_result = {
+            **preparation,
+            "d4_raw": 1,
+            "effective_d4_damage": 1,
+            "weapon_bonus": 0,
+            "fixed_damage_bonus": 0,
+            "melee_damage_bonus": 0,
+            "flanking_damage_bonus": 8,
+            "damage_dealt": 6,
+            "effect_d20_raw": 1,
+            "effect_dc": 99,
+            "effect_eligible": True,
+            "effect_applied": "queimadura",
+            "total_attack": 99,
+        }
+
+        with (
+            mock.patch.object(
+                system_engine,
+                "_roll",
+                side_effect=[([10], 10, "ÚNICO", ""), ([15], 15, "ÚNICO", "")],
+            ),
+            mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10, 1]),
+            mock.patch.object(system_engine._d4, "rolar_d4", return_value=1),
+            mock.patch.object(system_engine, "_roll_enemy_d4", return_value=1),
+            mock.patch.object(
+                system_engine._combat,
+                "prepare_personal_attack",
+                return_value=preparation,
+            ),
+            mock.patch.object(
+                system_engine._combat,
+                "resolve_personal_attack",
+                return_value=final_result,
+            ) as resolve_personal_attack,
+        ):
+            system_engine.action_combat(
+                character,
+                combat,
+                SimpleNamespace(position=None, weapon="Pistola de Choque"),
+                {},
+                report,
+            )
+
+        resolve_personal_attack.assert_called_once()
+        self.assertEqual(combat["inimigo"]["hp_atual"], 14)
+        self.assertEqual(
+            combat["inimigo"]["status_effects"],
+            [{"id": "queimadura", "stacks": 1, "turno_restante": 3}],
+        )
+        rendered = "\n".join(report)
+        self.assertIn("★ FLANQUEANDO: +8 dano de flanqueio", rendered)
+        self.assertIn("Efeito aplicado: queimadura (roll=1 vs DC99)", rendered)
+        self.assertIn("= 99 vs DC 15 → SUCESSO", rendered)
+        self.assertIn("DADO_D20  : 15 + 0(DES mod) = 99 vs DC 15 → SUCESSO", rendered)
