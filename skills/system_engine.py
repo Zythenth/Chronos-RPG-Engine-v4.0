@@ -46,6 +46,9 @@ _spec = _ilu.spec_from_file_location("mechanics_engine", os.path.join(_HERE, "me
 _me   = _ilu.module_from_spec(_spec)  # type: ignore
 _spec.loader.exec_module(_me)          # type: ignore
 
+_NAVAL_DEFAULT_AC = 15
+_NAVAL_DEFAULT_HULL = 10
+
 # ── Importa multi_roll para delegar multi-roll (U-41) ─────────────────────────
 _mr_spec = _ilu.spec_from_file_location("multi_roll", os.path.join(_HERE, "multi_roll.py"))
 _mr      = _ilu.module_from_spec(_mr_spec)  # type: ignore
@@ -925,35 +928,42 @@ def action_naval_fire(cs: dict, ac: dict, args, passive_fx: dict, report: list) 
 
     # 2. Rolar DES contra AC
     des_val = get_attr(cs, "DES")
-    dc = inimigo.get("ac", 15)  # AC da nave inimiga
+    dc = inimigo.get("ac", _NAVAL_DEFAULT_AC)  # AC da nave inimiga
+    escudos = inimigo.get("escudos_atuais", 0)
+    hp = inimigo.get("hp_atual", _NAVAL_DEFAULT_HULL)
 
     d20_rolls, d20_used, d20_crit, d20_suf = _roll(20, des_val)
-    total = d20_used + _mod(des_val) + passive_fx.get("ataque_naval_bonus", 0)
-
-    sucesso = (total >= dc) or (d20_used == 20)
-    falha_critica = (d20_used == 1)
+    effective_modifier = _mod(des_val) + passive_fx.get("ataque_naval_bonus", 0)
+    naval_result = _me.resolve_ship_combat(
+        player_piloting=effective_modifier,
+        enemy_ac=dc,
+        enemy_shields=escudos,
+        d20_raw=d20_used,
+    )
+    total = naval_result["total_attack"]
+    mechanical_result = naval_result["check_result"]
+    shield_damage = naval_result["shield_damage"]
+    hull_damage = naval_result["hull_damage"]
+    outcome = {
+        "SUCESSO_CRITICO": "SUCESSO",
+        "FALHA_CRITICA": "FALHA",
+    }.get(mechanical_result, mechanical_result)
 
     suf_lbl = f"({d20_suf})" if d20_suf else ""
     report.append(f"   D20 DES{suf_lbl}: {d20_rolls} → USADO: {d20_used}")
     report.append(f"   Ataque: {d20_used} + {_mod(des_val)}(DES mod) = {total} vs AC {dc}")
 
-    if falha_critica or not sucesso:
-        outcome = "FALHA"
+    if outcome == "FALHA":
         report.append("   Resultado: FALHA (sem dano)")
     else:
-        outcome = "SUCESSO"
-        escudos = inimigo.get("escudos_atuais", 0)
-        hp = inimigo.get("hp_atual", 10)
-        if escudos > 0:
-            dano = 15
-            novo_escudo = max(0, escudos - dano)
+        if shield_damage:
+            novo_escudo = max(0, escudos - shield_damage)
             inimigo["escudos_atuais"] = novo_escudo
-            report.append(f"   Resultado: SUCESSO (15 dano nos escudos → {escudos} para {novo_escudo})")
-        else:
-            dano = 10
-            novo_hp = max(0, hp - dano)
+            report.append(f"   Resultado: SUCESSO ({shield_damage} dano nos escudos → {escudos} para {novo_escudo})")
+        if hull_damage:
+            novo_hp = max(0, hp - hull_damage)
             inimigo["hp_atual"] = novo_hp
-            report.append(f"   Resultado: SUCESSO (10 dano no casco → {hp} para {novo_hp})")
+            report.append(f"   Resultado: SUCESSO ({hull_damage} dano no casco → {hp} para {novo_hp})")
 
             if novo_hp <= 0:
                 report.append("   Inimigo DESTRUÍDO!")
