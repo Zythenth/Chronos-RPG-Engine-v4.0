@@ -475,17 +475,20 @@ def action_combat(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> N
 
     if not inimigo_morto and not inimigo_fugiu and not enemy_stunned:
         d4e_raw = _roll_enemy_d4()
-        enemy_damage_raw = d4e_raw + racial
-
         # Redução de armadura e passivas aplicada primeiro
         armor_red   = _me.get_armor_reduction(ac["jogador"].get("armadura_equipada"))
         passive_red = passive_fx.get("dano_reducao_fisica", 0) if inimigo.get("tipo_dano","") == "Físico" else 0
-        enemy_damage_total = max(0, enemy_damage_raw - armor_red - passive_red)
+        enemy_damage_raw = d4e_raw + racial
+        enemy_damage_total = _combat.resolve_enemy_damage(
+            raw_damage=d4e_raw + racial,
+            armor_reduction=armor_red,
+            passive_reduction=passive_red,
+            enemy_acted_first=not player_first,
+        )
 
         # Se inimigo atacou primeiro (iniciativa), dano FINAL é multiplicado por 1.5
         if not player_first:
             report.append(f"   ⚠ INIMIGO ATACOU PRIMEIRO (iniciativa) — dano ×1.5")
-            enemy_damage_total = int(enemy_damage_total * 1.5)
 
         report.append(f"   D4_ENEMY: [{d4e_raw}] + RACIAL[{racial}] = {enemy_damage_raw}" +
                       (f" −{armor_red+passive_red}(red)" if (armor_red+passive_red) else "") +
@@ -856,7 +859,13 @@ def action_flee(cs: dict, ac: dict, args, passive_fx: dict, report: list) -> Non
         inimigo = ac["inimigo"]
         d4e = _roll_enemy_d4()
         racial = inimigo.get("damage_bonus_racial", 0)
-        dano   = max(0, d4e + racial - _me.get_armor_reduction(ac["jogador"].get("armadura_equipada")))
+        armor_red = _me.get_armor_reduction(ac["jogador"].get("armadura_equipada"))
+        dano = _combat.resolve_enemy_damage(
+            raw_damage=d4e + racial,
+            armor_reduction=armor_red,
+            passive_reduction=0,
+            enemy_acted_first=False,
+        )
         hp_b   = get_vital(cs, "hp")
         set_vital(cs, "hp", hp_b - dano)
         hp_a   = get_vital(cs, "hp")

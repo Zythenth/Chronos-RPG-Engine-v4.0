@@ -10,6 +10,7 @@ ARMOR_DAMAGE_REDUCTION = 2
 SHIP_DAMAGE_ON_SHIELDS = 15
 SHIP_DAMAGE_ON_HULL = 10
 FLANQUEAR_DAMAGE_BONUS = 2
+ENEMY_FIRST_DAMAGE_MULTIPLIER = 1.5
 
 
 _PERSONAL_ATTACK_OUTCOMES = {
@@ -174,6 +175,18 @@ def get_armor_reduction(
     return armor_definition.get("damage_reduction", ARMOR_DAMAGE_REDUCTION)
 
 
+def resolve_enemy_damage(
+    raw_damage: int,
+    armor_reduction: int,
+    passive_reduction: int,
+    enemy_acted_first: bool,
+) -> int:
+    reduced_damage = max(0, raw_damage - armor_reduction - passive_reduction)
+    if enemy_acted_first:
+        return int(reduced_damage * ENEMY_FIRST_DAMAGE_MULTIPLIER)
+    return reduced_damage
+
+
 def resolve_personal_combat(
     player_attr: int,
     enemy_dc: int,
@@ -206,7 +219,12 @@ def resolve_personal_combat(
     damage_taken = (
         0
         if enemy_is_stunned
-        else max(0, enemy_damage - armor_reduction)
+        else resolve_enemy_damage(
+            raw_damage=enemy_damage,
+            armor_reduction=armor_reduction,
+            passive_reduction=0,
+            enemy_acted_first=False,
+        )
     )
 
     return {

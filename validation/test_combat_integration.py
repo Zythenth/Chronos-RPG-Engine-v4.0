@@ -4,6 +4,7 @@ import ast
 import inspect
 import sys
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -267,6 +268,7 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
 
         self.assertEqual(call_names.count("prepare_personal_attack"), 1)
         self.assertEqual(call_names.count("resolve_personal_attack"), 1)
+        self.assertEqual(call_names.count("resolve_enemy_damage"), 1)
         self.assertNotIn("total_attack =", source)
         self.assertNotIn("d20_used == 20", source)
         self.assertNotIn("d20_used == 1", source)
@@ -584,3 +586,195 @@ class LivePersonalActionIntegrationTests(unittest.TestCase):
         self.assertIn("Efeito aplicado: queimadura (roll=1 vs DC99)", rendered)
         self.assertIn("= 99 vs DC 15 → SUCESSO", rendered)
         self.assertIn("DADO_D20  : 15 + 0(DES mod) = 99 vs DC 15 → SUCESSO", rendered)
+
+
+class EnemyDamageActionIntegrationTests(unittest.TestCase):
+    def test_counterattack_delegates_exact_values_and_applies_result_once(self):
+        cases = (
+            ("Físico", ([5], 5, "ÚNICO", ""), 10, 1, True, 7, "×1.5(init)"),
+            ("fisico", ([15], 15, "ÚNICO", ""), 10, 0, False, 7, ""),
+        )
+
+        for damage_type, initiative_roll, enemy_initiative, expected_passive, enemy_first, result_damage, marker in cases:
+            with self.subTest(damage_type=damage_type, enemy_first=enemy_first):
+                character = _character()
+                combat = _combat()
+                combat["inimigo"]["damage_bonus_racial"] = 3
+                combat["inimigo"]["tipo_dano"] = damage_type
+                report: list[str] = []
+                original_set_vital = system_engine.set_vital
+
+                with (
+                    mock.patch.object(
+                        system_engine,
+                        "_roll",
+                        side_effect=[initiative_roll, ([15], 15, "ÚNICO", "")],
+                    ),
+                    mock.patch.object(system_engine._d20, "rolar_d20", return_value=enemy_initiative),
+                    mock.patch.object(system_engine._d4, "rolar_d4", return_value=1),
+                    mock.patch.object(system_engine, "_roll_enemy_d4", return_value=4),
+                    mock.patch.object(system_engine._me, "get_armor_reduction", return_value=2) as armor_reduction,
+                    mock.patch.object(
+                        system_engine._combat,
+                        "resolve_enemy_damage",
+                        return_value=result_damage,
+                    ) as resolve_enemy_damage,
+                    mock.patch.object(
+                        system_engine,
+                        "set_vital",
+                        wraps=original_set_vital,
+                    ) as set_vital,
+                    mock.patch.object(
+                        system_engine,
+                        "_print_hud",
+                        wraps=system_engine._print_hud,
+                    ) as hud,
+                ):
+                    system_engine.action_combat(
+                        character,
+                        combat,
+                        SimpleNamespace(position=None, weapon=None),
+                        {"dano_reducao_fisica": 1},
+                        report,
+                    )
+
+                armor_reduction.assert_called_once_with(None)
+                resolve_enemy_damage.assert_called_once_with(
+                    raw_damage=7,
+                    armor_reduction=2,
+                    passive_reduction=expected_passive,
+                    enemy_acted_first=enemy_first,
+                )
+                set_vital.assert_called_once_with(character, "hp", 20 - result_damage)
+                self.assertEqual(character["vitals"]["hp"]["current"], 20 - result_damage)
+                self.assertIn(f"→ −{result_damage} HP jogador", "\n".join(report))
+                self.assertEqual("×1.5(init)" in "\n".join(report), bool(marker))
+                self.assertEqual(hud.call_args.args[11:14], (4, 3, result_damage))
+
+    def test_counterattack_never_rolls_or_resolves_for_dead_fled_or_stunned_enemy(self):
+        cases = ("dead", "fled", "stunned")
+
+        for case in cases:
+            with self.subTest(case=case):
+                character = _character()
+                combat = _combat(hull=4 if case == "dead" else 20)
+                report: list[str] = []
+                if case == "fled":
+                    combat["inimigo"]["ficha_racial"]["pode_fugir"] = True
+
+                with ExitStack() as stack:
+                    stack.enter_context(
+                        mock.patch.object(
+                            system_engine,
+                            "_roll",
+                            side_effect=[([10], 10, "ÚNICO", ""), ([15], 15, "ÚNICO", "")],
+                        )
+                    )
+                    stack.enter_context(
+                        mock.patch.object(system_engine._d20, "rolar_d20", side_effect=[10, 1])
+                    )
+                    stack.enter_context(mock.patch.object(system_engine._d4, "rolar_d4", return_value=4))
+                    enemy_d4 = stack.enter_context(mock.patch.object(system_engine, "_roll_enemy_d4"))
+                    resolve_enemy_damage = stack.enter_context(
+                        mock.patch.object(system_engine._combat, "resolve_enemy_damage")
+                    )
+                    if case == "fled":
+                        stack.enter_context(
+                            mock.patch.object(system_engine._me, "MORAL_FLEE_THRESHOLD", 1.0)
+                        )
+                    if case == "stunned":
+                        stack.enter_context(
+                            mock.patch.object(
+                                system_engine._me,
+                                "process_status_effects",
+                                return_value={
+                                    "efeitos_atualizados": [],
+                                    "dc_penalty": 0,
+                                    "enemy_is_stunned": True,
+                                    "dano_total": 0,
+                                },
+                            )
+                        )
+                    system_engine.action_combat(
+                        character,
+                        combat,
+                        SimpleNamespace(position=None, weapon=None),
+                        {},
+                        report,
+                    )
+
+                enemy_d4.assert_not_called()
+                resolve_enemy_damage.assert_not_called()
+                self.assertEqual(character["vitals"]["hp"]["current"], 20)
+                self.assertIn("D4_ENEMY: N/A", "\n".join(report))
+                self.assertIn(
+                    "atordoado" if case == "stunned" else "morto/fugiu",
+                    "\n".join(report),
+                )
+
+    def test_flee_delegates_only_after_failure_and_applies_result_once(self):
+        character = _character()
+        combat = _combat()
+        combat["inimigo"]["damage_bonus_racial"] = 3
+        report: list[str] = []
+        original_set_vital = system_engine.set_vital
+
+        with (
+            mock.patch.object(system_engine, "_roll", return_value=([14], 14, "ÚNICO", "")),
+            mock.patch.object(system_engine, "_roll_enemy_d4", return_value=4),
+            mock.patch.object(system_engine._me, "get_armor_reduction", return_value=2) as armor_reduction,
+            mock.patch.object(
+                system_engine._combat,
+                "resolve_enemy_damage",
+                return_value=5,
+            ) as resolve_enemy_damage,
+            mock.patch.object(system_engine, "set_vital", wraps=original_set_vital) as set_vital,
+            mock.patch.object(
+                system_engine,
+                "_print_hud",
+                wraps=system_engine._print_hud,
+            ) as hud,
+        ):
+            system_engine.action_flee(
+                character,
+                combat,
+                SimpleNamespace(),
+                {"dano_reducao_fisica": 99},
+                report,
+            )
+
+        armor_reduction.assert_called_once_with(None)
+        resolve_enemy_damage.assert_called_once_with(
+            raw_damage=7,
+            armor_reduction=2,
+            passive_reduction=0,
+            enemy_acted_first=False,
+        )
+        set_vital.assert_called_once_with(character, "hp", 15)
+        self.assertEqual(character["vitals"]["hp"]["current"], 15)
+        self.assertIn("Fuga falhou. Inimigo golpeia: D4[4]+3=7 → -5 HP", "\n".join(report))
+        self.assertEqual(hud.call_args.args[11:14], (0, 0, 0))
+
+    def test_flee_success_never_resolves_enemy_damage_and_keeps_legacy_hud(self):
+        character = _character()
+        combat = _combat()
+        report: list[str] = []
+
+        with (
+            mock.patch.object(system_engine, "_roll", return_value=([15], 15, "ÚNICO", "")),
+            mock.patch.object(system_engine, "_roll_enemy_d4") as enemy_d4,
+            mock.patch.object(system_engine._combat, "resolve_enemy_damage") as resolve_enemy_damage,
+            mock.patch.object(
+                system_engine,
+                "_print_hud",
+                wraps=system_engine._print_hud,
+            ) as hud,
+        ):
+            system_engine.action_flee(character, combat, SimpleNamespace(), {}, report)
+
+        enemy_d4.assert_not_called()
+        resolve_enemy_damage.assert_not_called()
+        self.assertFalse(combat["combate_ativo"])
+        self.assertEqual(character["vitals"]["hp"]["current"], 20)
+        self.assertIn("Fuga bem-sucedida. combate_ativo → false", "\n".join(report))
+        self.assertEqual(hud.call_args.args[11:14], (0, 0, 0))

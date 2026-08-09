@@ -507,6 +507,69 @@ class CombatDomainTests(unittest.TestCase):
         self.assertEqual(result["damage_reduction"], 4)
         self.assertEqual(result["damage_taken"], 0)
 
+    def test_enemy_damage_reduction_multiplier_and_ordinary_return_contract(self):
+        cases = (
+            ((7, 0, 0, False), 7),
+            ((7, 2, 0, False), 5),
+            ((7, 0, 3, False), 4),
+            ((7, 2, 3, False), 2),
+            ((5, 2, 3, False), 0),
+            ((2, 5, 3, False), 0),
+            ((7, 2, 1, True), 6),
+            ((5, 0, 0, True), 7),
+        )
+
+        for inputs, expected in cases:
+            with self.subTest(inputs=inputs):
+                self.assertEqual(combat.resolve_enemy_damage(*inputs), expected)
+
+        class ReducedDamage(int):
+            def __sub__(self, other):
+                return ReducedDamage(super().__sub__(other))
+
+            def __int__(self):
+                raise AssertionError("ordinary enemy damage must not be coerced")
+
+            def __mul__(self, other):
+                raise AssertionError("ordinary enemy damage must not be multiplied")
+
+        result = combat.resolve_enemy_damage(ReducedDamage(7), 0, 0, False)
+        self.assertIsInstance(result, ReducedDamage)
+        self.assertEqual(result, 7)
+
+    def test_legacy_personal_combat_delegates_enemy_damage_without_contract_drift(self):
+        expected_signature = [
+            "player_attr",
+            "enemy_dc",
+            "enemy_damage",
+            "attack_d20_raw",
+            "damage_d4_raw",
+            "armor_reduction",
+            "weapon_definition",
+            "enemy_is_stunned",
+            "effect_d20_raw",
+        ]
+        self.assertEqual(list(inspect.signature(combat.resolve_personal_combat).parameters), expected_signature)
+
+        with mock.patch.object(combat, "resolve_enemy_damage", return_value=6) as resolve_enemy_damage:
+            result = combat.resolve_personal_combat(0, 10, 9, 10, 2, 3, {})
+
+        self.assertEqual(list(result), PERSONAL_RESULT_KEYS)
+        self.assertEqual(result["damage_taken"], 6)
+        resolve_enemy_damage.assert_called_once_with(
+            raw_damage=9,
+            armor_reduction=3,
+            passive_reduction=0,
+            enemy_acted_first=False,
+        )
+
+        with mock.patch.object(combat, "resolve_enemy_damage") as resolve_enemy_damage:
+            stunned = combat.resolve_personal_combat(0, 10, 9, 10, 2, 3, {}, enemy_is_stunned=True)
+
+        self.assertEqual(list(stunned), PERSONAL_RESULT_KEYS)
+        self.assertEqual(stunned["damage_taken"], 0)
+        resolve_enemy_damage.assert_not_called()
+
     def test_armor_reduction_uses_only_explicit_data(self):
         self.assertEqual(combat.get_armor_reduction(None, None), 0)
         self.assertEqual(
